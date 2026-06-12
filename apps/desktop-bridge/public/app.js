@@ -104,8 +104,14 @@ async function refreshStatus() {
     const lanAddress = buildBestAddress(state.status);
     els.bridgeAddress.textContent = lanAddress;
     els.lanAddress.textContent = lanAddress;
-    els.publicAddress.textContent = state.status.publicUrl || "未配置";
-    els.copyPublicAddressButton.disabled = !state.status.publicUrl;
+    const virtualAddr = state.status.publicUrl || state.status.virtualAddress;
+    els.publicAddress.textContent = virtualAddr || "未配置";
+    if (!virtualAddr) {
+      els.publicAddress.classList.add("muted");
+    } else {
+      els.publicAddress.classList.remove("muted");
+    }
+    els.copyPublicAddressButton.disabled = !virtualAddr;
     els.emulatorAddress.textContent = `http://10.0.2.2:${state.status.port}`;
     els.appServerStatus.textContent = state.status.codexAppServer.available ? "可用" : "不可用";
     renderCodexHomeStatus(state.status.codexHome);

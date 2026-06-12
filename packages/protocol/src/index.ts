@@ -7,6 +7,7 @@ export type BridgeStatus = {
   port: number;
   addresses: string[];
   publicUrl?: string;
+  virtualAddress?: string;
   transports: TransportKind[];
   codexHome: CodexHomeStatus;
   codexAppServer: {
@@ -51,6 +52,7 @@ export type PairingInfo = {
   addresses: string[];
   port: number;
   publicUrl?: string;
+  virtualAddress?: string;
   transports: TransportKind[];
   qrPayload: string;
 };

@@ -34,7 +34,13 @@ let pairing = createPairToken();
 const authStore = new AuthStore(join(config.dataDir, "devices.json"));
 let logStore = new CodexLogStore(config.codexHome);
 let appServer = new CodexAppServerClient(config.codexCommand, config.enableAppServer, config.codexHome);
+const virtualAddress = getVirtualAddress();
 const publicDir = resolvePublicDir();
+
+function getVirtualAddress(): string | undefined {
+  const addr = addresses.find((a) => a.startsWith("100.")) ?? addresses.find((a) => !a.startsWith("192.168.") && !a.startsWith("10.") && !a.startsWith("172."));
+  return addr ? `http://${addr}:${config.port}` : undefined;
+}
 const embeddedPublicAssets = loadEmbeddedPublicAssets();
 
 const app = express();
@@ -246,6 +252,7 @@ function statusPayload(): BridgeStatus {
     port: config.port,
     addresses,
     publicUrl: config.publicUrl,
+    virtualAddress,
     transports,
     codexHome: config.codexHomeStatus,
     codexAppServer: {
@@ -267,6 +274,7 @@ function pairingPayload(): PairingInfo {
     addresses,
     port: config.port,
     publicUrl: config.publicUrl,
+    virtualAddress,
     transports,
     qrPayload: JSON.stringify({
       type: "codex-companion-pairing",
@@ -274,6 +282,7 @@ function pairingPayload(): PairingInfo {
       addresses,
       port: config.port,
       publicUrl: config.publicUrl,
+      virtualAddress,
       pairToken: pairing.pairToken,
       expiresAt: pairing.expiresAt.toISOString(),
       transports
