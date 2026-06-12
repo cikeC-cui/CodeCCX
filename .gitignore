@@ -2,7 +2,7 @@ node_modules/
 dist/
 release/
 apps/desktop-bridge/.exe-build/
-apps/desktop-bridge/release/
+# apps/desktop-bridge/release/
 .env
 .env.*
 *.log
