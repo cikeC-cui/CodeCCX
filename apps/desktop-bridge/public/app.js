@@ -1,5 +1,6 @@
 const state = {
   status: null,
+  bridgeOrigin: bridgeOriginFromLocation(),
   token: localStorage.getItem("codexCompanion.token") || "",
   deviceId: localStorage.getItem("codexCompanion.deviceId") || "",
   threads: [],
@@ -71,7 +72,7 @@ els.searchInput.addEventListener("input", applyFilter);
 els.sendButton.addEventListener("click", sendMessage);
 els.interruptButton.addEventListener("click", interruptThread);
 els.disconnectButton.addEventListener("click", resetConnection);
-els.openAppButton.addEventListener("click", () => window.open("/app", "_blank"));
+els.openAppButton.addEventListener("click", () => window.open(apiUrl("/app"), "_blank"));
 els.refreshPairButton.addEventListener("click", refreshPairInfo);
 els.codexHomeForm.addEventListener("submit", saveCodexHome);
 els.copyEmulatorAddressButton.addEventListener("click", () => copyText(els.emulatorAddress.textContent, "已复制模拟器地址"));
@@ -104,6 +105,7 @@ async function boot() {
 async function refreshStatus() {
   try {
     state.status = await api("/health", { auth: false });
+    rememberBridgeOrigin();
     els.bridgeSubtitle.textContent = state.status.bridgeName;
     const lanAddress = buildBestAddress(state.status);
     els.bridgeAddress.textContent = lanAddress;
@@ -224,10 +226,13 @@ async function refreshPairInfo() {
 function renderPairingQrCodes(pairInfo) {
   const lanSvg = pairInfo?.qrSvgs?.directLan;
   const virtualSvg = pairInfo?.qrSvgs?.virtualLan;
-  renderQrSlot(els.lanQrCode, lanSvg, "等待刷新");
-  renderQrSlot(els.virtualQrCode, virtualSvg, "未检测到虚拟内网");
+  const staleBridge = pairInfo && !pairInfo.qrSvgs;
+  renderQrSlot(els.lanQrCode, lanSvg, staleBridge ? "请重启新版 Bridge" : "等待刷新");
+  renderQrSlot(els.virtualQrCode, virtualSvg, staleBridge ? "请重启新版 Bridge" : "未检测到虚拟内网");
   els.lanQrCaption.textContent = buildBestAddress(state.status || pairInfo || { addresses: [], port: 4518 });
-  els.virtualQrCaption.textContent = pairInfo?.virtualAddress || pairInfo?.publicUrl || "启动 Tailscale / ZeroTier 后刷新";
+  els.virtualQrCaption.textContent = staleBridge
+    ? "当前运行的 Bridge 不含网页二维码接口"
+    : pairInfo?.virtualAddress || pairInfo?.publicUrl || "启动 Tailscale / ZeroTier 后刷新";
 }
 
 function renderQrSlot(container, svg, emptyText) {
@@ -479,7 +484,7 @@ async function interruptThread() {
 async function api(path, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.auth !== false && state.token) headers.Authorization = `Bearer ${state.token}`;
-  const response = await fetch(path, {
+  const response = await fetch(apiUrl(path), {
     method: options.method || "GET",
     headers,
     body: options.body ? JSON.stringify(options.body) : undefined
@@ -491,6 +496,23 @@ async function api(path, options = {}) {
     throw new Error(`${data.error?.code || response.status}: ${message}`);
   }
   return data;
+}
+
+function apiUrl(path) {
+  if (/^https?:\/\//i.test(path)) return path;
+  if (window.location.protocol === "file:") return `${state.bridgeOrigin}${path}`;
+  return path;
+}
+
+function bridgeOriginFromLocation() {
+  if (window.location.protocol !== "file:") return window.location.origin;
+  return localStorage.getItem("codexCompanion.bridgeOrigin") || "http://127.0.0.1:4518";
+}
+
+function rememberBridgeOrigin() {
+  if (window.location.protocol === "file:" && state.bridgeOrigin) {
+    localStorage.setItem("codexCompanion.bridgeOrigin", state.bridgeOrigin);
+  }
 }
 
 function resetConnection() {
