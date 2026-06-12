@@ -1,6 +1,6 @@
 node_modules/
 dist/
-release/
+# release/
 apps/desktop-bridge/.exe-build/
 # apps/desktop-bridge/release/
 .env

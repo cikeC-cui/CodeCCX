@@ -3,6 +3,7 @@ import cors from "cors";
 import http from "node:http";
 import { join } from "node:path";
 import { dirname } from "node:path";
+import { exec } from "node:child_process";
 import * as sea from "node:sea";
 import { fileURLToPath } from "node:url";
 import chokidar from "chokidar";
@@ -213,6 +214,11 @@ async function main(): Promise<void> {
     void appServer.start();
     server.listen(config.port, config.host, () => {
       printStartup();
+      if (sea.isSea()) {
+        const appUrl = `http://127.0.0.1:${config.port}/app`;
+        exec(`start "" "${appUrl}"`);
+        console.log(`\nOpening browser: ${appUrl}`);
+      }
     });
   } catch (error) {
     console.error(error instanceof Error ? error.stack || error.message : String(error));
