@@ -68,4 +68,3 @@ App 第一版能力：
 - Bridge 默认只适合局域网或 Tailscale / ZeroTier 私网。
 - 不要把 Bridge 端口直接暴露到公网。
 - 首次访问需要配对 token，后续接口需要设备 token。
-- 后续购买服务器时，只新增 Relay transport，不改变当前协议。
