@@ -8,6 +8,7 @@ export type BridgeStatus = {
   addresses: string[];
   publicUrl?: string;
   transports: TransportKind[];
+  codexHome: CodexHomeStatus;
   codexAppServer: {
     enabled: boolean;
     available: boolean;
@@ -16,6 +17,23 @@ export type BridgeStatus = {
     initialized?: boolean;
     recentEvents?: AppServerDiagnosticEvent[];
   };
+};
+
+export type CodexHomeSource = "environment" | "saved" | "auto" | "default";
+
+export type CodexHomeCandidate = {
+  path: string;
+  exists: boolean;
+  valid: boolean;
+  reason?: string;
+};
+
+export type CodexHomeStatus = {
+  path: string;
+  detected: boolean;
+  source: CodexHomeSource;
+  reason?: string;
+  candidates: CodexHomeCandidate[];
 };
 
 export type AppServerDiagnosticEvent = {
@@ -100,6 +118,14 @@ export type RenameThreadResponse = {
 export type DeleteThreadResponse = {
   deleted: boolean;
   threadId: string;
+};
+
+export type UpdateCodexHomeRequest = {
+  codexHome: string;
+};
+
+export type UpdateCodexHomeResponse = {
+  codexHome: CodexHomeStatus;
 };
 
 export type SendMessageResponse = {

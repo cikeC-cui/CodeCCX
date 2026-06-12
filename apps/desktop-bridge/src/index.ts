@@ -3,6 +3,7 @@ import cors from "cors";
 import http from "node:http";
 import { join } from "node:path";
 import { dirname } from "node:path";
+import * as sea from "node:sea";
 import { fileURLToPath } from "node:url";
 import chokidar from "chokidar";
 import type { FSWatcher } from "chokidar";
@@ -16,31 +17,30 @@ import type {
   PairRequest,
   RenameThreadRequest,
   SendMessageRequest,
-  SocketEnvelope
+  SocketEnvelope,
+  UpdateCodexHomeRequest
 } from "@codex-companion/protocol";
 import { AuthStore, createPairToken, type DeviceRecord } from "./auth.js";
-import { loadConfig } from "./config.js";
+import { inspectCodexHome, loadConfig, saveCodexHome } from "./config.js";
 import { CodexAppServerClient } from "./codexAppServer.js";
 import { CodexLogStore } from "./codexLogStore.js";
 import { getPrivateAddresses } from "./network.js";
 
-const config = loadConfig();
+let config = loadConfig();
 const addresses = getPrivateAddresses();
 let pairing = createPairToken();
 
 const authStore = new AuthStore(join(config.dataDir, "devices.json"));
-const logStore = new CodexLogStore(config.codexHome);
-const appServer = new CodexAppServerClient(config.codexCommand, config.enableAppServer, config.codexHome);
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const publicDir = join(__dirname, "../public");
-
-await authStore.load();
-void appServer.start();
+let logStore = new CodexLogStore(config.codexHome);
+let appServer = new CodexAppServerClient(config.codexCommand, config.enableAppServer, config.codexHome);
+const publicDir = resolvePublicDir();
+const embeddedPublicAssets = loadEmbeddedPublicAssets();
 
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: "1mb" }));
-app.use(express.static(publicDir));
+app.use(serveEmbeddedPublicAsset);
+if (publicDir) app.use(express.static(publicDir));
 
 app.get("/health", (_req, res) => {
   res.json(statusPayload());
@@ -63,6 +63,17 @@ app.post("/pair", async (req: Request<unknown, unknown, PairRequest>, res) => {
 
 app.get("/devices", requireAuth, (req, res) => {
   res.json(authStore.listDevices().map(({ tokenHash: _tokenHash, ...device }) => device));
+});
+
+app.post("/settings/codex-home", requireAuth, async (req: Request<unknown, unknown, UpdateCodexHomeRequest>, res) => {
+  const result = inspectCodexHome(req.body?.codexHome ?? "");
+  if (!result.valid) {
+    writeError(res, 400, "CODEX_HOME_INVALID", result.reason ?? "Codex data directory is invalid.");
+    return;
+  }
+  saveCodexHome(config.dataDir, result.path);
+  restartRuntime();
+  res.json({ codexHome: config.codexHomeStatus });
 });
 
 app.delete("/devices/:deviceId", requireAuth, async (req, res) => {
@@ -132,6 +143,7 @@ app.delete("/threads/:threadId", requireAuth, async (req: Request<{ threadId: st
 });
 
 app.get("/app", (_req, res) => {
+  if (sendEmbeddedPublicAsset(res, "index.html")) return;
   res.sendFile(join(publicDir, "index.html"));
 });
 
@@ -193,9 +205,20 @@ wss.on("connection", async (ws, request) => {
   });
 });
 
-server.listen(config.port, config.host, () => {
-  printStartup();
-});
+void main();
+
+async function main(): Promise<void> {
+  try {
+    await authStore.load();
+    void appServer.start();
+    server.listen(config.port, config.host, () => {
+      printStartup();
+    });
+  } catch (error) {
+    console.error(error instanceof Error ? error.stack || error.message : String(error));
+    process.exitCode = 1;
+  }
+}
 
 async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
   const token = bearerToken(req.header("authorization"));
@@ -218,6 +241,7 @@ function statusPayload(): BridgeStatus {
     addresses,
     publicUrl: config.publicUrl,
     transports,
+    codexHome: config.codexHomeStatus,
     codexAppServer: {
       enabled: config.enableAppServer,
       available: appServer.available,
@@ -280,4 +304,60 @@ function printStartup(): void {
   if (config.publicUrl) console.log(`  ${config.publicUrl}`);
   console.log(`\nPair token: ${payload.pairToken}\n`);
   qrcode.generate(payload.qrPayload, { small: true });
+}
+
+function restartRuntime(): void {
+  appServer.stop();
+  config = loadConfig();
+  logStore = new CodexLogStore(config.codexHome);
+  appServer = new CodexAppServerClient(config.codexCommand, config.enableAppServer, config.codexHome);
+  void appServer.start();
+}
+
+type EmbeddedPublicAsset = {
+  body: string;
+  contentType: string;
+};
+
+function loadEmbeddedPublicAssets(): Map<string, EmbeddedPublicAsset> | null {
+  if (!sea.isSea()) return null;
+  const assets = new Map<string, EmbeddedPublicAsset>();
+  for (const asset of [
+    { path: "index.html", contentType: "text/html; charset=utf-8" },
+    { path: "app.js", contentType: "text/javascript; charset=utf-8" },
+    { path: "styles.css", contentType: "text/css; charset=utf-8" }
+  ]) {
+    assets.set(asset.path, {
+      body: sea.getAsset(`public/${asset.path}`, "utf8") as string,
+      contentType: asset.contentType
+    });
+  }
+  return assets;
+}
+
+function serveEmbeddedPublicAsset(req: Request, res: Response, next: NextFunction): void {
+  if (!embeddedPublicAssets) {
+    next();
+    return;
+  }
+  const path = req.path === "/" ? "index.html" : req.path.replace(/^\/+/, "");
+  if (sendEmbeddedPublicAsset(res, path)) return;
+  next();
+}
+
+function sendEmbeddedPublicAsset(res: Response, path: string): boolean {
+  const asset = embeddedPublicAssets?.get(path);
+  if (!asset) return false;
+  res.setHeader("Content-Type", asset.contentType);
+  res.send(asset.body);
+  return true;
+}
+
+function resolvePublicDir(): string {
+  if (sea.isSea()) return "";
+  try {
+    return join(dirname(fileURLToPath(import.meta.url)), "../public");
+  } catch {
+    return join(process.cwd(), "apps", "desktop-bridge", "public");
+  }
 }

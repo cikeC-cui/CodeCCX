@@ -51,7 +51,7 @@ data class UiState(
 
 enum class NetworkMode(val id: String, val label: String) {
     Lan("lan", "局域网"),
-    Remote("remote", "互联网/虚拟网");
+    Remote("remote", "虚拟组网");
 
     companion object {
         fun fromId(value: String?): NetworkMode = entries.firstOrNull { it.id == value } ?: Lan
@@ -197,7 +197,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             networkAddressDialogVisible = false,
             networkAddressDraft = "",
             networkAddressSwitchAfterSave = false,
-            operationResult = "互联网/虚拟网地址已保存"
+            operationResult = "虚拟组网地址已保存"
         )
         if (shouldSwitch && bridge != null) {
             switchBridgeUrl(url, NetworkMode.Remote)
@@ -217,7 +217,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             networkAddressDialogVisible = false,
             networkAddressDraft = "",
             networkAddressSwitchAfterSave = false,
-            operationResult = "互联网/虚拟网地址已清空"
+            operationResult = "虚拟组网地址已清空"
         )
         if (bridge != null && currentMode == NetworkMode.Remote) {
             val lanUrl = bestLanUrl(_state.value.bridgeHealth, bridge)
@@ -242,7 +242,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun useLanNetwork() {
         val bridge = _state.value.savedBridge ?: return
         val lanUrl = bestLanUrl(_state.value.bridgeHealth, bridge) ?: run {
-            _state.value = _state.value.copy(error = "没有可用的局域网地址。请确认手机和电脑在同一个 Wi-Fi，或改用互联网/虚拟网地址。")
+            _state.value = _state.value.copy(error = "没有可用的局域网地址。请确认手机和电脑在同一个 Wi-Fi，或改用虚拟组网地址。")
             return
         }
         switchBridgeUrl(lanUrl, NetworkMode.Lan)
@@ -251,13 +251,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun useRemoteNetwork() {
         val bridge = _state.value.savedBridge ?: return
         if (normalizedUrlOrNull(_state.value.remoteBaseUrl) == null && normalizedUrlOrNull(bridge.remoteUrl) == null) {
+            _state.value = _state.value.copy(error = "虚拟组网不可用：请先填写 Tailscale 或 ZeroTier 地址。")
             showNetworkAddressDialog(switchAfterSave = true)
             return
         }
         val remoteUrl = normalizedUrlOrNull(_state.value.remoteBaseUrl)
             ?: normalizedUrlOrNull(bridge.remoteUrl)
             ?: run {
-                _state.value = _state.value.copy(error = "请先填写互联网/虚拟网地址，例如 Tailscale 地址、ZeroTier 地址或 https 公网隧道。")
+                _state.value = _state.value.copy(error = "虚拟组网不可用：请先填写 Tailscale 或 ZeroTier 地址。")
                 return
             }
         switchBridgeUrl(remoteUrl, NetworkMode.Remote)
@@ -545,7 +546,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun switchBridgeUrl(baseUrl: String, mode: NetworkMode) {
         val bridge = _state.value.savedBridge ?: return
         socketJob?.cancel()
-        val nextScreen = if (_state.value.screen == Screen.NetworkSettings) Screen.NetworkSettings else Screen.Threads
         val lanUrl = if (mode == NetworkMode.Lan) baseUrl else bridge.lanUrl
         val remoteUrl = if (mode == NetworkMode.Remote) baseUrl else normalizedUrlOrNull(_state.value.remoteBaseUrl).orEmpty()
         val updatedBridge = bridge.copy(
@@ -562,7 +562,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             networkMode = mode,
             selectedThread = null,
             events = emptyList(),
-            screen = nextScreen,
             error = null,
             operationResult = "已切换到${mode.label}"
         )

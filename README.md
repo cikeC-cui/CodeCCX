@@ -11,6 +11,7 @@ CodeCCX 是一个让手机查看和继续操作本机 Codex 会话的伴侣项�
 - 使用配对 token 完成手机和电脑的授权。
 - 保存设备 token，后续访问不需要每次重新配对。
 - 通过 WebSocket 自动刷新会话详情。
+- 首次启动时自动检测本机 Codex 数据目录；如果检测不到，可在电脑端页面手动保存路径。
 - 尝试通过 Codex App Server 向指定线程发送消息或中断当前回复。
 - 支持同一 Wi-Fi 局域网直连。
 - 支持 Tailscale / ZeroTier 这类虚拟局域网 IP 直连。
@@ -99,6 +100,15 @@ npm run dev:bridge
 - 一次性配对 token。
 - 用于配对的二维码内容。
 
+Bridge 会优先自动识别当前用户的 Codex 数据目录。默认会检查：
+
+- 环境变量 `CODEX_HOME` 指定的位置。
+- 已在电脑端页面保存过的位置。
+- `%USERPROFILE%\.codex`。
+- 常见的 OpenAI/Codex 本地目录。
+
+如果没有自动识别到，电脑端页面右侧会显示“Codex 数据目录”提示。把资源管理器里的 `.codex` 文件夹路径复制进去并保存即可，保存后会自动刷新会话列表。
+
 手机连接时不要使用 `127.0.0.1`，要使用电脑在局域网或虚拟局域网里的 IP 地址。
 
 ## 启动 Android App
@@ -143,6 +153,46 @@ npm run dev:bridge
 
 以开发模式运行电脑端 Bridge。
 
+## 生成一键运行 EXE
+
+在项目根目录运行：
+
+```powershell
+npm run build:bridge:exe
+```
+
+生成完成后，电脑端 Bridge 可执行文件会输出到：
+
+```text
+apps/desktop-bridge/release/CodeCCX-Bridge.exe
+```
+
+这个 exe 会内置 Node 运行时和电脑端网页资源。首次运行时仍会自动检测 Codex 数据目录；如果检测不到，可以打开电脑端页面后在右侧填写 `.codex` 路径。
+
+## 发布 GitHub Release
+
+先在项目根目录生成 exe：
+
+```powershell
+npm run build:bridge:exe
+```
+
+然后按以下步骤在 GitHub 上创建 Release：
+
+1. 打开 [Releases 页面](https://github.com/cikeC-cui/CodeCCX/releases)
+2. 点击 **Draft a new release**
+3. 填写信息：
+   - **Tag**：用版本号，例如 `v1.0.0`（首次发布点 **Create new tag**）
+   - **Release title**：`CodeCCX v1.0.0`
+   - **Description**：写此版本的主要更新内容
+4. 在 **Attach binaries** 区域，上传刚生成的文件：
+   ```text
+   apps/desktop-bridge/release/CodeCCX-Bridge.exe
+   ```
+5. 点击 **Publish release**
+
+发布后，其他人就可以从 Release 页面直接下载 `CodeCCX-Bridge.exe`，双击运行，不需要安装 Node 或 clone 项目。
+
 ## 可配置项
 
 电脑端 Bridge 支持用环境变量调整配置：
@@ -165,7 +215,7 @@ npm run start:bridge
 - `BRIDGE_HOST`：Bridge 监听地址，默认 `0.0.0.0`。
 - `BRIDGE_NAME`：配对时显示的电脑端名称。
 - `BRIDGE_PUBLIC_URL`：未来接入公网或 Relay 时使用的公开地址。
-- `CODEX_HOME`：Codex 本地数据目录，默认 `%USERPROFILE%\.codex`。
+- `CODEX_HOME`：Codex 本地数据目录。未配置时 Bridge 会自动检测，也可以在电脑端页面手动保存。
 - `BRIDGE_DATA_DIR`：Bridge 保存已配对设备的目录。
 - `CODEX_COMMAND`：启动 Codex App Server 的命令。
 - `BRIDGE_DISABLE_APP_SERVER=1`：只查看历史会话，不尝试发送消息到 Codex。

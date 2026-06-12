@@ -81,6 +81,17 @@ export class CodexAppServerClient {
     }
   }
 
+  stop(): void {
+    this.lines?.close();
+    this.lines = null;
+    if (this.child && !this.child.killed) this.child.kill();
+    this.child = null;
+    this.initialized = false;
+    for (const pending of this.pending.values()) pending.reject(new Error("Codex App Server was restarted."));
+    this.pending.clear();
+    this.activeTurnByThread.clear();
+  }
+
   async sendMessage(threadId: string, text: string): Promise<SendMessageResponse> {
     if (!this.enabled) {
       return { accepted: false, message: "Codex App Server 已禁用。" };

@@ -17,6 +17,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -104,9 +106,11 @@ import com.codexcompanion.model.ThreadSummary
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
 import java.util.Locale
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.doubleOrNull
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 
 private val AppBackground = Color(0xFFFAFAFF)
@@ -534,6 +538,10 @@ fun BridgeHeader(
 
 @Composable
 fun NetworkSwitchCard(state: UiState, viewModel: MainViewModel) {
+    val currentUrl = state.savedBridge?.baseUrl ?: state.baseUrl
+    val lanUrl = state.savedBridge?.lanUrl.orEmpty()
+    val remoteUrl = state.remoteBaseUrl.ifBlank { state.savedBridge?.remoteUrl.orEmpty() }
+    val remoteReady = remoteUrl.isNotBlank()
     Surface(
         shape = RoundedCornerShape(14.dp),
         color = CardSurface,
@@ -541,53 +549,90 @@ fun NetworkSwitchCard(state: UiState, viewModel: MainViewModel) {
         border = BorderStroke(1.dp, BorderSoft)
     ) {
         Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("当前入口", color = TextPrimary, fontWeight = FontWeight.Bold)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                Text("连接入口", modifier = Modifier.weight(1f), color = TextPrimary, fontWeight = FontWeight.Bold)
                 StatusPill(state.networkMode.label, if (state.networkMode == NetworkMode.Lan) "idle" else "active")
             }
             Text(
-                state.savedBridge?.baseUrl ?: state.baseUrl,
+                currentUrl,
                 color = TextMuted,
                 style = MaterialTheme.typography.bodyMedium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                FilterChip(
-                    selected = state.networkMode == NetworkMode.Lan,
-                    onClick = viewModel::useLanNetwork,
-                    label = { Text("局域网") },
-                    shape = RoundedCornerShape(14.dp),
-                    colors = chipColors(state.networkMode == NetworkMode.Lan)
-                )
-                FilterChip(
-                    selected = state.networkMode == NetworkMode.Remote,
-                    onClick = viewModel::useRemoteNetwork,
-                    label = { Text("互联网/虚拟网") },
-                    shape = RoundedCornerShape(14.dp),
-                    colors = chipColors(state.networkMode == NetworkMode.Remote)
-                )
-            }
-            RemoteAddressRow(state.remoteBaseUrl) { viewModel.showNetworkAddressDialog() }
-            if (false) {
-            OutlinedTextField(
-                value = state.remoteBaseUrl,
-                onValueChange = viewModel::updateRemoteBaseUrl,
-                label = { Text("互联网/虚拟网地址") },
-                placeholder = { Text("https://example.com 或 http://100.x.x.x:4518") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(14.dp),
-                colors = formFieldColors()
+            NetworkOptionRow(
+                title = "局域网",
+                description = lanUrl.ifBlank { "同一 Wi-Fi 下自动使用电脑局域网地址" },
+                selected = state.networkMode == NetworkMode.Lan,
+                available = lanUrl.isNotBlank(),
+                unavailableText = "未检测到可用局域网地址",
+                icon = Icons.Default.Link,
+                onClick = viewModel::useLanNetwork
             )
+            NetworkOptionRow(
+                title = "虚拟组网",
+                description = remoteUrl.ifBlank { "填写 Tailscale 或 ZeroTier 地址后可用" },
+                selected = state.networkMode == NetworkMode.Remote,
+                available = remoteReady,
+                unavailableText = "不可用，请先填写地址",
+                icon = Icons.Default.Storage,
+                onClick = viewModel::useRemoteNetwork
+            )
+            RemoteAddressRow(remoteUrl) { viewModel.showNetworkAddressDialog() }
             Text(
-                "同 Wi-Fi 用局域网；跨网络用 Tailscale / ZeroTier / 公网隧道地址。",
+                "设置页切换入口后会停留在当前页面，方便继续检查连接状态。",
                 color = TextMuted,
                 style = MaterialTheme.typography.bodySmall
             )
+        }
+    }
+}
+
+@Composable
+fun NetworkOptionRow(
+    title: String,
+    description: String,
+    selected: Boolean,
+    available: Boolean,
+    unavailableText: String,
+    icon: ImageVector,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(14.dp),
+        color = if (selected) BrandPurpleSoft else Color(0xFFF8FAFF),
+        border = BorderStroke(1.dp, if (selected) BrandPurple else BorderSoft)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 11.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Icon(icon, contentDescription = null, tint = if (selected) BrandPurple else TextMuted, modifier = Modifier.size(20.dp))
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(title, color = TextPrimary, fontWeight = FontWeight.Bold)
+                    StatusPill(
+                        if (available) "可用" else "不可用",
+                        if (available) "idle" else "focus"
+                    )
+                }
+                Text(
+                    if (available) description else unavailableText,
+                    color = if (available) TextMuted else TrafficFocus,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            if (selected) {
+                Icon(Icons.Default.CheckCircle, contentDescription = "当前入口", tint = BrandPurple, modifier = Modifier.size(20.dp))
             }
         }
     }
@@ -609,7 +654,7 @@ fun RemoteAddressRow(remoteUrl: String, onEdit: () -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text("互联网/虚拟网地址", color = TextPrimary, fontWeight = FontWeight.Bold)
+                Text("虚拟组网地址", color = TextPrimary, fontWeight = FontWeight.Bold)
                 Text(
                     remoteUrl.ifBlank { "未设置，点击填写" },
                     color = if (remoteUrl.isBlank()) TextMuted else TextPrimary,
@@ -627,7 +672,7 @@ fun RemoteAddressRow(remoteUrl: String, onEdit: () -> Unit) {
 fun NetworkAddressDialog(state: UiState, viewModel: MainViewModel) {
     AlertDialog(
         onDismissRequest = viewModel::hideNetworkAddressDialog,
-        title = { Text("互联网/虚拟网地址", color = TextPrimary, fontWeight = FontWeight.Bold) },
+        title = { Text("虚拟组网地址", color = TextPrimary, fontWeight = FontWeight.Bold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(
@@ -641,7 +686,7 @@ fun NetworkAddressDialog(state: UiState, viewModel: MainViewModel) {
                     colors = formFieldColors()
                 )
                 Text(
-                    "这里适合填写 Tailscale、ZeroTier 或公网服务器地址。保存后会写入本地缓存。",
+                    "这里适合填写 Tailscale 或 ZeroTier 地址。保存后会写入本地缓存。",
                     color = TextMuted,
                     style = MaterialTheme.typography.bodySmall
                 )
@@ -923,6 +968,7 @@ fun TaskStats(events: List<ConversationEvent>) {
 }
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 fun QuotaSummaryCard(events: List<ConversationEvent>) {
     val summary = quotaSummary(events) ?: return
     Surface(
@@ -931,14 +977,14 @@ fun QuotaSummaryCard(events: List<ConversationEvent>) {
         color = Color(0xFFF8FAFF),
         border = BorderStroke(1.dp, BorderSoft)
     ) {
-        Row(
+        FlowRow(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            summary.primary?.let { QuotaChip("5小时", it, Modifier.weight(1f)) }
-            summary.secondary?.let { QuotaChip("7天", it, Modifier.weight(1f)) }
-            summary.tokens?.let { QuotaChip("Token", it, Modifier.weight(1f)) }
+            summary.primary?.let { QuotaChip("5小时", it) }
+            summary.secondary?.let { QuotaChip("7天", it) }
+            summary.tokens?.let { QuotaChip("Token", it) }
         }
     }
 }
@@ -947,6 +993,7 @@ fun QuotaSummaryCard(events: List<ConversationEvent>) {
 fun QuotaChip(label: String, value: String, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
+            .width(96.dp)
             .background(CardSurface, RoundedCornerShape(12.dp))
             .border(BorderStroke(1.dp, BorderSoft), RoundedCornerShape(12.dp))
             .padding(horizontal = 9.dp, vertical = 6.dp),
@@ -1324,28 +1371,52 @@ data class QuotaSummary(
 )
 
 fun quotaSummary(events: List<ConversationEvent>): QuotaSummary? {
-    val root = events.asReversed()
-        .mapNotNull { it.metadata as? JsonObject }
-        .firstOrNull { it.objectAt("rate_limits") != null || it.objectAt("info") != null }
-        ?: return null
-    val rateLimits = root.objectAt("rate_limits")
+    val root = findQuotaMetadata(events) ?: return null
+    val rateLimits = root.objectAt("rate_limits") ?: root.objectAt("rateLimits")
     val tokenUsage = root.objectAt("info")?.objectAt("total_token_usage")
-    val primary = rateLimits?.objectAt("primary")?.doubleAt("used_percent")?.let(::formatPercent)
-    val secondary = rateLimits?.objectAt("secondary")?.doubleAt("used_percent")?.let(::formatPercent)
-    val tokens = tokenUsage?.longAt("total_tokens")?.let(::compactNumber)
+        ?: root.objectAt("info")?.objectAt("totalTokenUsage")
+        ?: root.objectAt("total_token_usage")
+        ?: root.objectAt("totalTokenUsage")
+        ?: root.objectAt("usage")
+        ?: root.objectAt("last_token_usage")
+    val primary = rateLimits?.objectAt("primary")?.numberAt("used_percent")?.let(::formatPercent)
+    val secondary = rateLimits?.objectAt("secondary")?.numberAt("used_percent")?.let(::formatPercent)
+    val tokens = tokenUsage?.longAt("total_tokens")
+        ?: tokenUsage?.longAt("totalTokens")
+        ?: root.longAt("total_tokens")
+        ?: root.longAt("totalTokens")
     if (primary == null && secondary == null && tokens == null) return null
     return QuotaSummary(
         primary = primary?.let { "$it%" },
         secondary = secondary?.let { "$it%" },
-        tokens = tokens
+        tokens = tokens?.let(::compactNumber)
     )
+}
+
+fun findQuotaMetadata(events: List<ConversationEvent>): JsonObject? {
+    return events.asReversed()
+        .mapNotNull { it.metadata as? JsonObject }
+        .firstOrNull {
+            it.objectAt("rate_limits") != null ||
+                it.objectAt("rateLimits") != null ||
+                it.objectAt("info") != null ||
+                it.objectAt("usage") != null ||
+                it.objectAt("total_token_usage") != null ||
+                it.objectAt("totalTokenUsage") != null ||
+                it.longAt("total_tokens") != null ||
+                it.longAt("totalTokens") != null
+        }
 }
 
 fun JsonObject.objectAt(key: String): JsonObject? = this[key] as? JsonObject
 
-fun JsonObject.doubleAt(key: String): Double? = (this[key] as? JsonPrimitive)?.doubleOrNull
+fun JsonObject.numberAt(key: String): Double? = primitiveAt(key)?.doubleOrNull
 
-fun JsonObject.longAt(key: String): Long? = (this[key] as? JsonPrimitive)?.longOrNull
+fun JsonObject.longAt(key: String): Long? = primitiveAt(key)?.longOrNull
+
+fun JsonObject.primitiveAt(key: String): JsonPrimitive? = this[key]?.primitiveOrNull()
+
+fun JsonElement.primitiveOrNull(): JsonPrimitive? = runCatching { jsonPrimitive }.getOrNull()
 
 fun formatPercent(value: Double): String {
     return if (value % 1.0 == 0.0) {

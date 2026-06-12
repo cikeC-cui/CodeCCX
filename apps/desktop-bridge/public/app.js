@@ -42,6 +42,14 @@ const els = {
   copyPublicAddressButton: document.querySelector("#copyPublicAddressButton"),
   copyPairTokenButton: document.querySelector("#copyPairTokenButton"),
   appServerStatus: document.querySelector("#appServerStatus"),
+  codexHomeCard: document.querySelector("#codexHomeCard"),
+  codexHomeStatus: document.querySelector("#codexHomeStatus"),
+  codexHomePath: document.querySelector("#codexHomePath"),
+  codexHomeForm: document.querySelector("#codexHomeForm"),
+  codexHomeInput: document.querySelector("#codexHomeInput"),
+  saveCodexHomeButton: document.querySelector("#saveCodexHomeButton"),
+  codexHomeResult: document.querySelector("#codexHomeResult"),
+  codexHomeCandidates: document.querySelector("#codexHomeCandidates"),
   backendWarning: document.querySelector("#backendWarning"),
   appServerError: document.querySelector("#appServerError"),
   appServerEvents: document.querySelector("#appServerEvents"),
@@ -61,6 +69,7 @@ els.interruptButton.addEventListener("click", interruptThread);
 els.disconnectButton.addEventListener("click", resetConnection);
 els.openAppButton.addEventListener("click", () => window.open("/app", "_blank"));
 els.refreshPairButton.addEventListener("click", refreshPairInfo);
+els.codexHomeForm.addEventListener("submit", saveCodexHome);
 els.copyEmulatorAddressButton.addEventListener("click", () => copyText(els.emulatorAddress.textContent, "已复制模拟器地址"));
 els.copyLanAddressButton.addEventListener("click", () => copyText(els.lanAddress.textContent, "已复制真机地址"));
 els.copyPublicAddressButton.addEventListener("click", () => copyText(els.publicAddress.textContent, "已复制公网/虚拟网地址"));
@@ -99,6 +108,7 @@ async function refreshStatus() {
     els.copyPublicAddressButton.disabled = !state.status.publicUrl;
     els.emulatorAddress.textContent = `http://10.0.2.2:${state.status.port}`;
     els.appServerStatus.textContent = state.status.codexAppServer.available ? "可用" : "不可用";
+    renderCodexHomeStatus(state.status.codexHome);
     const warning = extractWarning(state.status.codexAppServer.lastError);
     els.backendWarning.textContent = warning || "-";
     els.appServerError.textContent = warning ? "上方显示的是最近一次 Codex 后端警告。" : "";
@@ -108,7 +118,67 @@ async function refreshStatus() {
   } catch (error) {
     els.bridgeSubtitle.textContent = "Bridge 离线";
     els.appServerStatus.textContent = "未知";
+    renderCodexHomeStatus(null);
     els.appServerError.textContent = error.message;
+  }
+}
+
+function renderCodexHomeStatus(codexHome) {
+  if (!codexHome) {
+    els.codexHomeCard.classList.add("warning");
+    els.codexHomeStatus.textContent = "未知";
+    els.codexHomePath.textContent = "-";
+    els.codexHomeCandidates.replaceChildren();
+    return;
+  }
+
+  els.codexHomeCard.classList.toggle("warning", !codexHome.detected);
+  els.codexHomeStatus.textContent = codexHome.detected ? sourceLabel(codexHome.source) : "需要选择";
+  els.codexHomePath.textContent = codexHome.path || "-";
+  els.codexHomeInput.placeholder = codexHome.detected ? "可粘贴新的 .codex 路径后保存" : "粘贴 Codex 数据目录，例如 C:\\Users\\你的用户名\\.codex";
+  if (!els.codexHomeInput.value) els.codexHomeInput.value = "";
+  if (!codexHome.detected && !els.codexHomeResult.textContent) {
+    els.codexHomeResult.textContent = "没有自动找到 Codex 数据目录，请从资源管理器复制 .codex 文件夹路径到这里。";
+  }
+
+  const candidates = codexHome.candidates || [];
+  els.codexHomeCandidates.replaceChildren(
+    ...candidates.map((candidate) => {
+      const row = document.createElement("div");
+      row.className = `diagnostic-item ${candidate.valid ? "" : "error"}`;
+      row.innerHTML = `
+        <span>${candidate.valid ? "可用" : candidate.exists ? "不可用" : "不存在"}</span>
+        <strong>${escapeHtml(candidate.path || "-")}</strong>
+        <p>${escapeHtml(candidate.reason || "已找到 Codex 数据。")}</p>
+      `;
+      return row;
+    })
+  );
+}
+
+async function saveCodexHome(event) {
+  event.preventDefault();
+  const codexHome = els.codexHomeInput.value.trim();
+  if (!codexHome) {
+    els.codexHomeResult.textContent = "请先粘贴 Codex 数据目录路径。";
+    return;
+  }
+  els.saveCodexHomeButton.disabled = true;
+  els.codexHomeResult.textContent = "正在检查目录...";
+  try {
+    const result = await api("/settings/codex-home", {
+      method: "POST",
+      body: { codexHome }
+    });
+    renderCodexHomeStatus(result.codexHome);
+    els.codexHomeInput.value = "";
+    els.codexHomeResult.textContent = "已保存，会话列表正在刷新。";
+    await refreshStatus();
+    await refreshThreads();
+  } catch (error) {
+    els.codexHomeResult.textContent = error.message;
+  } finally {
+    els.saveCodexHomeButton.disabled = false;
   }
 }
 
@@ -500,6 +570,15 @@ function extractWarning(value) {
   } catch {
     return value;
   }
+}
+
+function sourceLabel(value) {
+  return {
+    environment: "环境变量",
+    saved: "已保存",
+    auto: "自动识别",
+    default: "默认位置"
+  }[value] || "已识别";
 }
 
 function escapeHtml(value) {

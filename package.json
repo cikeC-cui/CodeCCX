@@ -9,6 +9,7 @@
   ],
   "scripts": {
     "build": "npm --workspace @codex-companion/protocol run build && npm --workspace @codex-companion/desktop-bridge run build",
+    "build:bridge:exe": "npm --workspace @codex-companion/desktop-bridge run build:exe",
     "dev:bridge": "npm --workspace @codex-companion/desktop-bridge run dev",
     "start:bridge": "npm --workspace @codex-companion/desktop-bridge start",
     "check": "npm --workspace @codex-companion/protocol run check && npm --workspace @codex-companion/desktop-bridge run check"

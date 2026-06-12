@@ -143,6 +143,22 @@
             <span>Codex 服务</span>
             <strong id="appServerStatus">检查中</strong>
           </div>
+          <div class="codex-home-card" id="codexHomeCard">
+            <div class="codex-home-head">
+              <span>Codex 数据目录</span>
+              <strong id="codexHomeStatus">检查中</strong>
+            </div>
+            <code id="codexHomePath">-</code>
+            <form id="codexHomeForm" class="codex-home-form">
+              <input id="codexHomeInput" type="text" placeholder="例如 C:\Users\你的用户名\.codex" autocomplete="off" />
+              <button id="saveCodexHomeButton" class="button small-button" type="submit">保存</button>
+            </form>
+            <p id="codexHomeResult" class="muted copy-result"></p>
+            <details class="diagnostic-toggle">
+              <summary>检测过的位置</summary>
+              <div class="diagnostic-list" id="codexHomeCandidates"></div>
+            </details>
+          </div>
           <div class="kv">
             <span>最近警告</span>
             <strong id="backendWarning">-</strong>
