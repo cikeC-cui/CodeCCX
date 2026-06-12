@@ -55,6 +55,7 @@ data class PairQrPayload(
     val addresses: List<String> = emptyList(),
     val port: Int,
     val publicUrl: String? = null,
+    val virtualAddress: String? = null,
     val pairToken: String,
     val expiresAt: String,
     val transports: List<String> = emptyList()

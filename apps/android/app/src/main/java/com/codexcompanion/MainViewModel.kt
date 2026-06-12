@@ -268,7 +268,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         runCatching {
             val payload = json.decodeFromString<PairQrPayload>(raw)
             val firstAddress = preferredLanAddress(payload.addresses)
-            val url = firstAddress?.let { "http://$it:${payload.port}" }.orEmpty()
+            val url = firstAddress?.let { "http://$it:${payload.port}" }
+                ?: payload.virtualAddress
+                ?: payload.publicUrl
+                ?: ""
             _state.value = _state.value.copy(
                 baseUrl = url,
                 remoteBaseUrl = payload.publicUrl.orEmpty(),
@@ -578,6 +581,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun preferredLanAddress(addresses: List<String>): String? {
         return addresses.firstOrNull { it.startsWith("192.168.") }
+            ?: addresses.firstOrNull { it.startsWith("100.") }
             ?: addresses.firstOrNull { it.startsWith("10.") }
             ?: addresses.firstOrNull { address ->
                 val second = address.substringAfter("172.", "").substringBefore(".").toIntOrNull()
