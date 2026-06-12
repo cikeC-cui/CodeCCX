@@ -1,4 +1,4 @@
-# CodeCCX
+﻿# CodeCCX
 
 CodeCCX 是一个让手机查看和继续操作本机 Codex 会话的伴侣项目。当前版本为 `1.0.0`，第一阶段不依赖云服务器，电脑和手机通过局域网或虚拟局域网直接连接。
 
@@ -188,10 +188,11 @@ npm run build:bridge:exe
 4. 在 **Attach binaries** 区域，上传刚生成的文件：
    ```text
    apps/desktop-bridge/release/CodeCCX-Bridge.exe
+   apps/desktop-bridge/release/CodeCCX-Android.apk
    ```
 5. 点击 **Publish release**
 
-发布后，其他人就可以从 Release 页面直接下载 `CodeCCX-Bridge.exe`，双击运行，不需要安装 Node 或 clone 项目。
+发布后，其他人就可以从 Release 页面直接下载 `CodeCCX-Bridge.exe` 和 `CodeCCX-Android.apk`，exe 双击运行，apk 可直接安装到 Android 手机，不需要安装 Node 或 clone 项目。
 
 ## 可配置项
 

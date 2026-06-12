@@ -39,20 +39,20 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Inbox
-import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.Logout
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.Stop
@@ -169,7 +169,7 @@ fun CodexCompanionApp(viewModel: MainViewModel = viewModel()) {
                     navigationIcon = {
                         if (state.screen == Screen.ThreadDetail || state.screen == Screen.NetworkSettings) {
                             IconButton(onClick = viewModel::backToThreads) {
-                                Icon(Icons.Default.ArrowBack, contentDescription = "返回")
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
                             }
                         }
                     },
@@ -182,7 +182,7 @@ fun CodexCompanionApp(viewModel: MainViewModel = viewModel()) {
                                 Icon(Icons.Default.Refresh, contentDescription = "刷新")
                             }
                             IconButton(onClick = viewModel::disconnect) {
-                                Icon(Icons.Default.Logout, contentDescription = "断开连接")
+                                Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "断开连接")
                             }
                         }
                     }
@@ -462,7 +462,7 @@ fun ProjectHeader(project: String, count: Int, expanded: Boolean, onToggle: () -
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Icon(
-                Icons.Default.KeyboardArrowRight,
+                Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = null,
                 tint = BrandPurple,
                 modifier = Modifier
@@ -735,7 +735,7 @@ fun ThreadRow(thread: ThreadSummary, onOpen: (ThreadSummary) -> Unit) {
                 Spacer(Modifier.width(10.dp))
                 Text(thread.title, modifier = Modifier.weight(1f), color = TextPrimary, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 StatusPill(statusLabel(thread), thread.status)
-                Icon(Icons.Default.KeyboardArrowRight, contentDescription = null, tint = TextMuted)
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = TextMuted)
             }
             Text(thread.preview, color = TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text("${thread.model ?: "未知模型"} · ${formatShortTime(thread.updatedAt)}", style = MaterialTheme.typography.bodySmall, color = TextMuted)
@@ -842,7 +842,7 @@ fun ThreadDetailScreen(state: UiState, viewModel: MainViewModel) {
                 )
             )
             FilledIconButton(onClick = viewModel::sendMessage, modifier = Modifier.size(50.dp)) {
-                Icon(Icons.Default.Send, contentDescription = "发送")
+                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "发送")
             }
         }
     }
