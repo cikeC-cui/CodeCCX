@@ -649,6 +649,68 @@ textarea {
   font-size: 13px;
 }
 
+.qr-pairing {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.qr-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+  min-width: 0;
+  padding: 8px;
+  text-align: center;
+}
+
+.qr-card-primary {
+  border-color: #8fc6b5;
+  box-shadow: 0 0 0 2px rgba(23, 107, 88, 0.08);
+}
+
+.qr-card span {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.qr-card small {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.25;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.qr-code {
+  align-items: center;
+  aspect-ratio: 1;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  display: flex;
+  justify-content: center;
+  overflow: hidden;
+  padding: 4px;
+  width: min(100%, 118px);
+}
+
+.qr-code svg {
+  display: block;
+  height: 100%;
+  width: 100%;
+}
+
+.qr-empty {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .copy-field {
   display: grid;
   grid-template-columns: 64px minmax(0, 1fr) auto;

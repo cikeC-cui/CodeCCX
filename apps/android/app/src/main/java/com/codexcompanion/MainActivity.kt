@@ -1379,8 +1379,10 @@ fun quotaSummary(events: List<ConversationEvent>): QuotaSummary? {
         ?: root.objectAt("totalTokenUsage")
         ?: root.objectAt("usage")
         ?: root.objectAt("last_token_usage")
-    val primary = rateLimits?.objectAt("primary")?.numberAt("used_percent")?.let(::formatPercent)
-    val secondary = rateLimits?.objectAt("secondary")?.numberAt("used_percent")?.let(::formatPercent)
+    val primary = (rateLimits?.objectAt("primary")?.numberAt("used_percent")
+        ?: rateLimits?.objectAt("primary")?.numberAt("usedPercent"))?.let(::formatPercent)
+    val secondary = (rateLimits?.objectAt("secondary")?.numberAt("used_percent")
+        ?: rateLimits?.objectAt("secondary")?.numberAt("usedPercent"))?.let(::formatPercent)
     val tokens = tokenUsage?.longAt("total_tokens")
         ?: tokenUsage?.longAt("totalTokens")
         ?: root.longAt("total_tokens")
@@ -1403,6 +1405,7 @@ fun findQuotaMetadata(events: List<ConversationEvent>): JsonObject? {
                 it.objectAt("usage") != null ||
                 it.objectAt("total_token_usage") != null ||
                 it.objectAt("totalTokenUsage") != null ||
+                it.objectAt("last_token_usage") != null ||
                 it.longAt("total_tokens") != null ||
                 it.longAt("totalTokens") != null
         }
@@ -1448,7 +1451,14 @@ fun isCompletedEvent(event: ConversationEvent): Boolean {
 
 fun bestAddress(status: BridgeStatus?): String {
     if (status == null) return "-"
-    val address = status.addresses.firstOrNull { it.startsWith("192.168.") } ?: status.addresses.firstOrNull() ?: status.host
+    val address = status.addresses.firstOrNull { it.startsWith("192.168.") }
+        ?: status.addresses.firstOrNull { it.startsWith("10.") }
+        ?: status.addresses.firstOrNull { address ->
+            val second = address.substringAfter("172.", "").substringBefore(".").toIntOrNull()
+            address.startsWith("172.") && second != null && second in 16..31
+        }
+        ?: status.addresses.firstOrNull()
+        ?: status.host
     return "http://$address:${status.port}"
 }
 
@@ -1508,5 +1518,15 @@ fun friendlyEventSummary(event: AppServerDiagnosticEvent): String {
 }
 
 fun formatShortTime(value: String): String {
-    return value.replace('T', ' ').substringBeforeLast('.').substringBefore('+').substringBefore('Z')
+    val parsed = listOf(
+        "yyyy-MM-dd'T'HH:mm:ss.SSSXXX",
+        "yyyy-MM-dd'T'HH:mm:ssXXX",
+        "yyyy-MM-dd'T'HH:mm:ss.SSSX",
+        "yyyy-MM-dd'T'HH:mm:ssX",
+        "yyyy-MM-dd'T'HH:mm:ss.SSS",
+        "yyyy-MM-dd'T'HH:mm:ss"
+    ).firstNotNullOfOrNull { pattern ->
+        runCatching { java.text.SimpleDateFormat(pattern, Locale.US).parse(value) }.getOrNull()
+    } ?: return value.replace('T', ' ').substringBeforeLast('.').substringBefore('+').substringBefore('Z')
+    return java.text.SimpleDateFormat("MM-dd HH:mm", Locale.CHINA).format(parsed)
 }

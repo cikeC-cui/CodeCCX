@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import chokidar from "chokidar";
 import type { FSWatcher } from "chokidar";
 import qrcode from "qrcode-terminal";
+import QRCode from "qrcode";
 import { WebSocketServer } from "ws";
 import type {
   ApiError,
@@ -25,7 +26,7 @@ import { AuthStore, createPairToken, type DeviceRecord } from "./auth.js";
 import { inspectCodexHome, loadConfig, saveCodexHome } from "./config.js";
 import { CodexAppServerClient } from "./codexAppServer.js";
 import { CodexLogStore } from "./codexLogStore.js";
-import { getPrivateAddresses } from "./network.js";
+import { getLanAddresses, getPrivateAddresses, getVirtualAddresses } from "./network.js";
 
 let config = loadConfig();
 const addresses = getPrivateAddresses();
@@ -38,7 +39,9 @@ const publicDir = resolvePublicDir();
 
 function getVirtualAddress(): string | undefined {
   const addrs = getPrivateAddresses();
-  const addr = addrs.find((a) => a.startsWith("100.")) ?? addrs.find((a) => !a.startsWith("192.168.") && !a.startsWith("10.") && !a.startsWith("172."));
+  const addr =
+    getVirtualAddresses(addrs)[0] ??
+    addrs.find((a) => !a.startsWith("192.168.") && !a.startsWith("10.") && !a.startsWith("172."));
   return addr ? `http://${addr}:${config.port}` : undefined;
 }
 const embeddedPublicAssets = loadEmbeddedPublicAssets();
@@ -53,9 +56,13 @@ app.get("/health", (_req, res) => {
   res.json(statusPayload());
 });
 
-app.get("/pair", (_req, res) => {
+app.get("/pair", async (_req, res, next) => {
   ensurePairingFresh();
-  res.json(pairingPayload());
+  try {
+    res.json(await pairingPayload());
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.post("/pair", async (req: Request<unknown, unknown, PairRequest>, res) => {
@@ -264,9 +271,11 @@ function statusPayload(): BridgeStatus {
   };
 }
 
-function pairingPayload(): PairingInfo {
+async function pairingPayload(): Promise<PairingInfo> {
   ensurePairingFresh();
   const transports: PairingInfo["transports"] = config.publicUrl ? ["direct_lan", "virtual_lan", "relay"] : ["direct_lan", "virtual_lan"];
+  const qrPayloads = buildPairingQrPayloads(transports);
+  const qrSvgs = await buildQrSvgs(qrPayloads);
   return {
     bridgeName: config.name,
     pairToken: pairing.pairToken,
@@ -276,17 +285,12 @@ function pairingPayload(): PairingInfo {
     publicUrl: config.publicUrl,
     virtualAddress: getVirtualAddress(),
     transports,
-    qrPayload: JSON.stringify({
-      type: "codex-companion-pairing",
-      bridgeName: config.name,
-      addresses: getPrivateAddresses(),
-      port: config.port,
-      publicUrl: config.publicUrl,
-      virtualAddress: getVirtualAddress(),
-      pairToken: pairing.pairToken,
-      expiresAt: pairing.expiresAt.toISOString(),
-      transports
-    })
+    qrPayload: qrPayloads.legacy,
+    qrPayloads: {
+      directLan: qrPayloads.directLan,
+      virtualLan: qrPayloads.virtualLan
+    },
+    qrSvgs
   };
 }
 
@@ -294,6 +298,73 @@ function ensurePairingFresh(): void {
   if (pairing.expiresAt.getTime() <= Date.now()) {
     pairing = createPairToken();
   }
+}
+
+type PairingQrPayloads = {
+  legacy: string;
+  directLan: string;
+  virtualLan?: string;
+};
+
+function buildPairingQrPayloads(transports: PairingInfo["transports"]): PairingQrPayloads {
+  const allAddresses = getPrivateAddresses();
+  const lanAddresses = getLanAddresses(allAddresses);
+  const virtualAddress = getVirtualAddress();
+  const legacy = pairingQrPayload({
+    addresses: allAddresses,
+    publicUrl: config.publicUrl,
+    virtualAddress,
+    transports
+  });
+  return {
+    legacy,
+    directLan: pairingQrPayload({
+      addresses: lanAddresses.length ? lanAddresses : allAddresses,
+      transports: ["direct_lan"]
+    }),
+    virtualLan: virtualAddress || config.publicUrl
+      ? pairingQrPayload({
+          addresses: [],
+          publicUrl: config.publicUrl,
+          virtualAddress,
+          transports: config.publicUrl ? ["virtual_lan", "relay"] : ["virtual_lan"]
+        })
+      : undefined
+  };
+}
+
+function pairingQrPayload(options: {
+  addresses: string[];
+  publicUrl?: string;
+  virtualAddress?: string;
+  transports: PairingInfo["transports"];
+}): string {
+  return JSON.stringify({
+    type: "codex-companion-pairing",
+    bridgeName: config.name,
+    addresses: options.addresses,
+    port: config.port,
+    publicUrl: options.publicUrl,
+    virtualAddress: options.virtualAddress,
+    pairToken: pairing.pairToken,
+    expiresAt: pairing.expiresAt.toISOString(),
+    transports: options.transports
+  });
+}
+
+async function buildQrSvgs(payloads: PairingQrPayloads): Promise<NonNullable<PairingInfo["qrSvgs"]>> {
+  const directLan = await qrSvg(payloads.directLan);
+  const virtualLan = payloads.virtualLan ? await qrSvg(payloads.virtualLan) : undefined;
+  return { directLan, virtualLan };
+}
+
+async function qrSvg(payload: string): Promise<string> {
+  return QRCode.toString(payload, {
+    type: "svg",
+    margin: 1,
+    width: 180,
+    errorCorrectionLevel: "M"
+  });
 }
 
 function bearerToken(header: string | undefined): string | undefined {
@@ -307,8 +378,8 @@ function writeError(res: Response, status: number, code: string, message: string
   res.status(status).json(body);
 }
 
-function printStartup(): void {
-  const payload = pairingPayload();
+async function printStartup(): Promise<void> {
+  const payload = await pairingPayload();
   console.log(`\n${config.name} is running.`);
   console.log(`Codex home: ${config.codexHome}`);
   console.log(`Bridge data: ${config.dataDir}`);
@@ -318,7 +389,14 @@ function printStartup(): void {
   if (addresses.length === 0) console.log(`  http://<computer-ip>:${config.port}`);
   if (config.publicUrl) console.log(`  ${config.publicUrl}`);
   console.log(`\nPair token: ${payload.pairToken}\n`);
-  qrcode.generate(payload.qrPayload, { small: true });
+  console.log("LAN pairing QR:");
+  qrcode.generate(payload.qrPayloads?.directLan ?? payload.qrPayload, { small: true });
+  if (payload.qrPayloads?.virtualLan) {
+    console.log("\nVirtual-LAN pairing QR:");
+    qrcode.generate(payload.qrPayloads.virtualLan, { small: true });
+  } else {
+    console.log("\nVirtual-LAN pairing QR: no Tailscale/ZeroTier address was detected.");
+  }
 }
 
 function restartRuntime(): void {

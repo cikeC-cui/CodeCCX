@@ -12,6 +12,7 @@ data class BridgeStatus(
     val port: Int,
     val addresses: List<String> = emptyList(),
     val publicUrl: String? = null,
+    val virtualAddress: String? = null,
     val transports: List<String> = emptyList(),
     val codexAppServer: CodexAppServerStatus
 )

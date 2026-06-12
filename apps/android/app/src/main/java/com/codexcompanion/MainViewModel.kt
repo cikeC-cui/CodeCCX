@@ -274,7 +274,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 ?: ""
             _state.value = _state.value.copy(
                 baseUrl = url,
-                remoteBaseUrl = payload.publicUrl.orEmpty(),
+                remoteBaseUrl = (payload.virtualAddress ?: payload.publicUrl).orEmpty(),
                 pairToken = payload.pairToken,
                 bridgeStatus = payload.bridgeName,
                 bridgeHealth = null,
@@ -311,7 +311,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         baseUrl = baseUrl,
                         bridgeStatus = status.bridgeName,
                         bridgeHealth = status,
-                        remoteBaseUrl = _state.value.remoteBaseUrl.ifBlank { status.publicUrl.orEmpty() },
+                        remoteBaseUrl = _state.value.remoteBaseUrl.ifBlank { (status.virtualAddress ?: status.publicUrl).orEmpty() },
                         error = null
                     )
                 }
@@ -581,7 +581,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun preferredLanAddress(addresses: List<String>): String? {
         return addresses.firstOrNull { it.startsWith("192.168.") }
-            ?: addresses.firstOrNull { it.startsWith("100.") }
             ?: addresses.firstOrNull { it.startsWith("10.") }
             ?: addresses.firstOrNull { address ->
                 val second = address.substringAfter("172.", "").substringBefore(".").toIntOrNull()
@@ -639,7 +638,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         _state.value = _state.value.copy(
                             bridgeHealth = status,
                             bridgeStatus = status.bridgeName,
-                            remoteBaseUrl = _state.value.remoteBaseUrl.ifBlank { status.publicUrl.orEmpty() }
+                            remoteBaseUrl = _state.value.remoteBaseUrl.ifBlank { (status.virtualAddress ?: status.publicUrl).orEmpty() }
                         )
                     }
                 runCatching { client.threads(bridge.baseUrl, bridge.authToken).sortedByDescending { it.updatedAt } }
@@ -711,6 +710,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun currentTimestamp(): String {
         val now = java.util.Date()
-        return java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS", java.util.Locale.US).format(now)
+        return java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX", java.util.Locale.US).format(now)
     }
 }

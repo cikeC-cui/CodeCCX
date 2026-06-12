@@ -55,6 +55,14 @@ export type PairingInfo = {
   virtualAddress?: string;
   transports: TransportKind[];
   qrPayload: string;
+  qrPayloads?: {
+    directLan?: string;
+    virtualLan?: string;
+  };
+  qrSvgs?: {
+    directLan?: string;
+    virtualLan?: string;
+  };
 };
 
 export type PairRequest = {

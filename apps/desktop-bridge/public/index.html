@@ -113,6 +113,18 @@
               </div>
               <button id="refreshPairButton" class="button small-button">刷新</button>
             </div>
+            <div class="qr-pairing">
+              <div class="qr-card qr-card-primary">
+                <span>局域网扫码</span>
+                <div id="lanQrCode" class="qr-code"></div>
+                <small id="lanQrCaption">手机和电脑在同一 Wi-Fi 时使用</small>
+              </div>
+              <div class="qr-card">
+                <span>虚拟内网扫码</span>
+                <div id="virtualQrCode" class="qr-code qr-empty">等待地址</div>
+                <small id="virtualQrCaption">Tailscale / ZeroTier 远程使用</small>
+              </div>
+            </div>
             <div class="copy-field">
               <span>模拟器地址</span>
               <code id="emulatorAddress">http://10.0.2.2:4518</code>

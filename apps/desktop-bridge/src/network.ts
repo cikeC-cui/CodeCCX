@@ -11,6 +11,14 @@ export function getPrivateAddresses(): string[] {
   return [...addresses].sort();
 }
 
+export function getLanAddresses(addresses = getPrivateAddresses()): string[] {
+  return addresses.filter(isLanPrivateAddress);
+}
+
+export function getVirtualAddresses(addresses = getPrivateAddresses()): string[] {
+  return addresses.filter(isVirtualPrivateAddress);
+}
+
 export function isLikelyPrivate(address: string): boolean {
   return (
     address.startsWith("10.") ||
@@ -18,6 +26,18 @@ export function isLikelyPrivate(address: string): boolean {
     /^172\.(1[6-9]|2\d|3[0-1])\./.test(address) ||
     address.startsWith("100.")
   );
+}
+
+export function isLanPrivateAddress(address: string): boolean {
+  return (
+    address.startsWith("10.") ||
+    address.startsWith("192.168.") ||
+    /^172\.(1[6-9]|2\d|3[0-1])\./.test(address)
+  );
+}
+
+export function isVirtualPrivateAddress(address: string): boolean {
+  return address.startsWith("100.");
 }
 
 export function normalizeBaseUrl(input: string): string {

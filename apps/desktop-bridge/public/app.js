@@ -35,6 +35,10 @@ const els = {
   lanAddress: document.querySelector("#lanAddress"),
   publicAddress: document.querySelector("#publicAddress"),
   pairToken: document.querySelector("#pairToken"),
+  lanQrCode: document.querySelector("#lanQrCode"),
+  virtualQrCode: document.querySelector("#virtualQrCode"),
+  lanQrCaption: document.querySelector("#lanQrCaption"),
+  virtualQrCaption: document.querySelector("#virtualQrCaption"),
   copyResult: document.querySelector("#copyResult"),
   refreshPairButton: document.querySelector("#refreshPairButton"),
   copyEmulatorAddressButton: document.querySelector("#copyEmulatorAddressButton"),
@@ -206,13 +210,35 @@ async function refreshPairInfo() {
     state.pairInfo = await api("/pair", { auth: false });
     els.pairToken.textContent = state.pairInfo.pairToken;
     els.pairingStatus.textContent = `有效期到 ${formatTime(state.pairInfo.expiresAt)}`;
+    renderPairingQrCodes(state.pairInfo);
     els.copyPairTokenButton.disabled = false;
   } catch (error) {
     els.pairingStatus.textContent = "配对码获取失败";
     els.pairToken.textContent = "-";
+    renderPairingQrCodes(null);
     els.copyPairTokenButton.disabled = true;
     showCopyResult(error.message);
   }
+}
+
+function renderPairingQrCodes(pairInfo) {
+  const lanSvg = pairInfo?.qrSvgs?.directLan;
+  const virtualSvg = pairInfo?.qrSvgs?.virtualLan;
+  renderQrSlot(els.lanQrCode, lanSvg, "等待刷新");
+  renderQrSlot(els.virtualQrCode, virtualSvg, "未检测到虚拟内网");
+  els.lanQrCaption.textContent = buildBestAddress(state.status || pairInfo || { addresses: [], port: 4518 });
+  els.virtualQrCaption.textContent = pairInfo?.virtualAddress || pairInfo?.publicUrl || "启动 Tailscale / ZeroTier 后刷新";
+}
+
+function renderQrSlot(container, svg, emptyText) {
+  if (!container) return;
+  if (svg) {
+    container.classList.remove("qr-empty");
+    container.innerHTML = svg;
+    return;
+  }
+  container.classList.add("qr-empty");
+  container.textContent = emptyText;
 }
 
 async function refreshThreads() {
@@ -520,7 +546,16 @@ function showCopyResult(message) {
 }
 
 function buildBestAddress(status) {
-  const address = status.addresses?.find((item) => item.startsWith("192.168.")) || status.addresses?.[0] || "127.0.0.1";
+  const addresses = status.addresses || [];
+  const address =
+    addresses.find((item) => item.startsWith("192.168.")) ||
+    addresses.find((item) => item.startsWith("10.")) ||
+    addresses.find((item) => {
+      const second = Number(item.substring(4).split(".")[0]);
+      return item.startsWith("172.") && Number.isFinite(second) && second >= 16 && second <= 31;
+    }) ||
+    addresses[0] ||
+    "127.0.0.1";
   return `http://${address}:${status.port}`;
 }
 
@@ -679,11 +714,19 @@ function isCompletedEvent(event) {
 }
 
 function quotaSummary(events) {
-  const event = [...events].reverse().find((item) => item.metadata?.rate_limits || item.metadata?.info);
-  if (!event) return null;
-  const primary = event.metadata?.rate_limits?.primary?.used_percent;
-  const secondary = event.metadata?.rate_limits?.secondary?.used_percent;
-  const totalTokens = event.metadata?.info?.total_token_usage?.total_tokens;
+  const metadata = findQuotaMetadata(events);
+  if (!metadata) return null;
+  const rateLimits = metadata.rate_limits || metadata.rateLimits;
+  const tokenUsage =
+    metadata.info?.total_token_usage ||
+    metadata.info?.totalTokenUsage ||
+    metadata.total_token_usage ||
+    metadata.totalTokenUsage ||
+    metadata.usage ||
+    metadata.last_token_usage;
+  const primary = numericValue(rateLimits?.primary?.used_percent ?? rateLimits?.primary?.usedPercent);
+  const secondary = numericValue(rateLimits?.secondary?.used_percent ?? rateLimits?.secondary?.usedPercent);
+  const totalTokens = numericValue(tokenUsage?.total_tokens ?? tokenUsage?.totalTokens ?? metadata.total_tokens ?? metadata.totalTokens);
   const quota = [
     Number.isFinite(primary) ? `5小时 ${formatPercent(primary)}%` : "",
     Number.isFinite(secondary) ? `7天 ${formatPercent(secondary)}%` : ""
@@ -691,6 +734,28 @@ function quotaSummary(events) {
   const tokens = Number.isFinite(totalTokens) ? compactNumber(totalTokens) : "";
   if (!quota && !tokens) return null;
   return { quota: quota || "-", tokens: tokens || "-" };
+}
+
+function findQuotaMetadata(events) {
+  return [...events].reverse()
+    .map((item) => item.metadata)
+    .find((metadata) => metadata && (
+      metadata.rate_limits ||
+      metadata.rateLimits ||
+      metadata.info ||
+      metadata.usage ||
+      metadata.total_token_usage ||
+      metadata.totalTokenUsage ||
+      metadata.last_token_usage ||
+      metadata.total_tokens ||
+      metadata.totalTokens
+    ));
+}
+
+function numericValue(value) {
+  if (typeof value === "number") return value;
+  if (typeof value === "string" && value.trim()) return Number(value);
+  return undefined;
 }
 
 function formatPercent(value) {
