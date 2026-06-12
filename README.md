@@ -1,202 +1,171 @@
-﻿# CodeCCX
+# CodeCCX
 
-CodeCCX 是一个让手机查看和继续操作本机 Codex 会话的伴侣项目。当前版本为 `1.0.0`，第一阶段不依赖云服务器，电脑和手机通过局域网或虚拟局域网直接连接。
+[English](README.md) | [简体中文](README.zh-CN.md)
 
-## 当前能做什么
+CodeCCX is a local-first Android companion for OpenAI Codex. It lets you view, monitor, and continue your Codex sessions from your phone while the actual Codex data stays on your own Windows computer.
 
-- 在 Windows 电脑上启动本地 Bridge 服务。
-- 读取本机 Codex 会话列表和会话详情。
-- 在浏览器页面查看会话、工具调用、思考过程、状态和错误事件。
-- 通过 Android App 连接电脑端 Bridge。
-- 使用配对 token 完成手机和电脑的授权。
-- 保存设备 token，后续访问不需要每次重新配对。
-- 通过 WebSocket 自动刷新会话详情。
-- 首次启动时自动检测本机 Codex 数据目录；如果检测不到，可在电脑端页面手动保存路径。
-- 尝试通过 Codex App Server 向指定线程发送消息或中断当前回复。
-- 支持同一 Wi-Fi 局域网直连。
-- 支持 Tailscale / ZeroTier 这类虚拟局域网 IP 直连。
+## Why CodeCCX
 
-## 项目结构
+Codex is powerful on desktop, but many real workflows are not always in front of the computer:
 
-```text
-CodeCCX/
-  apps/
-    desktop-bridge/      Windows 电脑端 Bridge 和本地网页
-    android/             Android 手机 App
-  packages/
-    protocol/            电脑端和手机端共用的数据协议
-  启动电脑端页面.bat       Windows 一键启动脚本
-  package.json           Node 工作区配置
-```
+- You start a long Codex task and want to check progress from your phone.
+- You want to continue a session while away from the desk.
+- You want a simple mobile monitor for reasoning, tool calls, errors, and final replies.
+- You do not want to expose your Codex credentials to a third-party remote UI.
 
-## 需要准备的环境
+CodeCCX solves this by running a small Bridge on your Windows computer. Your Android phone connects to that Bridge over LAN or a virtual private network such as Tailscale / ZeroTier.
 
-电脑端需要：
+## Security First
 
-- Windows 10 或 Windows 11。
-- Node.js `20` 或更高版本。
-- npm，通常会随 Node.js 一起安装。
-- Git，用于下载和更新项目。
-- Codex Desktop 或 Codex CLI，并且当前用户目录下已经有 Codex 会话数据。
+CodeCCX is designed around a simple rule: your Codex data should stay on your machine.
 
-Android 端需要：
+- No cloud relay is required in the current version.
+- No Codex token is uploaded to a third-party service.
+- The Bridge reads local Codex session files from your computer.
+- Pairing uses a short-lived token and QR code.
+- Paired devices use their own device token.
+- LAN / Tailscale / ZeroTier is recommended.
+- Do not expose the Bridge port directly to the public internet.
 
-- Android Studio。
-- JDK 17。
-- Android SDK 35。
-- Android 7.0 或更高版本的真机或模拟器。
+## Current Features
 
-可选网络环境：
+- Windows Desktop Bridge with local web console.
+- Android App for viewing and continuing Codex sessions.
+- LAN pairing with token or QR code.
+- Virtual-LAN pairing for Tailscale / ZeroTier addresses.
+- Session list, session detail, and event filters.
+- Message, reasoning, tool call, status, and error views.
+- WebSocket refresh for active sessions.
+- Codex App Server integration for sending messages to an existing thread.
+- Interrupt current Codex turn from phone or web.
+- Automatic Codex home detection with manual fallback.
+- Release-ready EXE and APK artifacts.
 
-- 手机和电脑在同一个 Wi-Fi。
-- 或者手机和电脑都加入同一个 Tailscale / ZeroTier 网络。
+## Preview
 
-## 第一次下载项目
+Screenshots and demo video will be added here.
+
+Suggested demo flow:
+
+1. Start `CodeCCX-Bridge.exe` on Windows.
+2. Scan the LAN or virtual-LAN QR code from Android.
+3. Open a Codex session on phone.
+4. Send a message from Android.
+5. Watch the reply complete in real time.
+
+## Quick Start
+
+### Option A: Download Release
+
+Download the latest release assets:
+
+- `CodeCCX-Bridge.exe` for Windows.
+- `CodeCCX-Android.apk` for Android.
+
+Then:
+
+1. Run `CodeCCX-Bridge.exe` on your Windows computer.
+2. Open the web console at `http://127.0.0.1:4518/app`.
+3. Install `CodeCCX-Android.apk` on your phone.
+4. Scan the pairing QR code from the web console or terminal.
+
+Phone and computer must be on the same Wi-Fi, or both must join the same Tailscale / ZeroTier network.
+
+### Option B: Run From Source
 
 ```powershell
 git clone https://github.com/cikeC-cui/CodeCCX.git
 cd CodeCCX
 npm install
+npm run build
+npm run start:bridge
 ```
 
-如果已经下载过项目，后续更新代码时先运行：
-
-```powershell
-git pull --rebase
-npm install
-```
-
-## 启动电脑端
-
-最简单的方式是在项目根目录双击：
-
-```text
-启动电脑端页面.bat
-```
-
-脚本会自动安装依赖、构建项目、启动 Bridge，并打开电脑端页面：
+The Bridge web console opens at:
 
 ```text
 http://127.0.0.1:4518/app
 ```
 
-也可以手动启动：
-
-```powershell
-npm install
-npm run build
-npm run start:bridge
-```
-
-开发时可以运行：
-
-```powershell
-npm run dev:bridge
-```
-
-启动成功后，终端会显示：
-
-- 本机可访问地址，例如 `http://192.168.x.x:4518`。
-- 一次性配对 token。
-- 用于配对的二维码内容。
-
-Bridge 会优先自动识别当前用户的 Codex 数据目录。默认会检查：
-
-- 环境变量 `CODEX_HOME` 指定的位置。
-- 已在电脑端页面保存过的位置。
-- `%USERPROFILE%\.codex`。
-- 常见的 OpenAI/Codex 本地目录。
-
-如果没有自动识别到，电脑端页面右侧会显示“Codex 数据目录”提示。把资源管理器里的 `.codex` 文件夹路径复制进去并保存即可，保存后会自动刷新会话列表。
-
-手机连接时不要使用 `127.0.0.1`，要使用电脑在局域网或虚拟局域网里的 IP 地址。
-
-## 启动 Android App
-
-1. 先启动电脑端 Bridge。
-2. 用 Android Studio 打开 `apps/android`。
-3. 等待 Gradle 同步完成。
-4. 选择真机或模拟器。
-5. 点击 Run 启动 App。
-6. 在 App 中输入电脑端 Bridge 地址，例如 `http://192.168.x.x:4518`。
-7. 输入电脑端终端里显示的配对 token，或使用二维码配对。
-
-如果使用 Tailscale / ZeroTier，把地址换成电脑的虚拟局域网 IP，例如：
+When connecting from your phone, do not use `127.0.0.1`. Use your computer LAN IP or virtual-LAN IP, for example:
 
 ```text
+http://192.168.1.15:4518
 http://100.x.x.x:4518
 ```
 
-## 常用命令
+## Android Setup
+
+Requirements:
+
+- Android Studio.
+- Android SDK 35.
+- JDK 17 or newer.
+- Android 7.0 or newer phone/emulator.
+
+Steps:
+
+1. Start the Desktop Bridge first.
+2. Open `apps/android` in Android Studio.
+3. Wait for Gradle sync.
+4. Select a phone or emulator.
+5. Run the app.
+6. Pair with the Bridge URL and token, or scan the QR code.
+
+## Project Structure
+
+```text
+CodeCCX/
+  apps/
+    desktop-bridge/      Windows Bridge, local web console, release artifacts
+    android/             Android companion app
+  packages/
+    protocol/            Shared API and WebSocket protocol types
+  启动电脑端页面.bat       Windows one-click launcher
+  package.json           npm workspace configuration
+```
+
+## Common Commands
+
+Check TypeScript:
 
 ```powershell
 npm run check
 ```
 
-检查 TypeScript 类型。
+Build shared protocol and desktop Bridge:
 
 ```powershell
 npm run build
 ```
 
-构建共用协议包和电脑端 Bridge。
+Start the built Bridge:
 
 ```powershell
 npm run start:bridge
 ```
 
-运行已构建的电脑端 Bridge。
+Run Bridge in development mode:
 
 ```powershell
 npm run dev:bridge
 ```
 
-以开发模式运行电脑端 Bridge。
-
-## 生成一键运行 EXE
-
-在项目根目录运行：
+Build the Windows EXE:
 
 ```powershell
 npm run build:bridge:exe
 ```
 
-生成完成后，电脑端 Bridge 可执行文件会输出到：
+The EXE is generated at:
 
 ```text
 apps/desktop-bridge/release/CodeCCX-Bridge.exe
 ```
 
-这个 exe 会内置 Node 运行时和电脑端网页资源。首次运行时仍会自动检测 Codex 数据目录；如果检测不到，可以打开电脑端页面后在右侧填写 `.codex` 路径。
+## Configuration
 
-## 发布 GitHub Release
-
-先在项目根目录生成 exe：
-
-```powershell
-npm run build:bridge:exe
-```
-
-然后按以下步骤在 GitHub 上创建 Release：
-
-1. 打开 [Releases 页面](https://github.com/cikeC-cui/CodeCCX/releases)
-2. 点击 **Draft a new release**
-3. 填写信息：
-   - **Tag**：用版本号，例如 `v1.0.0`（首次发布点 **Create new tag**）
-   - **Release title**：`CodeCCX v1.0.0`
-   - **Description**：写此版本的主要更新内容
-4. 在 **Attach binaries** 区域，上传刚生成的文件：
-   ```text
-   apps/desktop-bridge/release/CodeCCX-Bridge.exe
-   apps/desktop-bridge/release/CodeCCX-Android.apk
-   ```
-5. 点击 **Publish release**
-
-发布后，其他人就可以从 Release 页面直接下载 `CodeCCX-Bridge.exe` 和 `CodeCCX-Android.apk`，exe 双击运行，apk 可直接安装到 Android 手机，不需要安装 Node 或 clone 项目。
-
-## 可配置项
-
-电脑端 Bridge 支持用环境变量调整配置：
+The Desktop Bridge can be configured with environment variables:
 
 ```powershell
 $env:BRIDGE_PORT="4518"
@@ -210,58 +179,109 @@ $env:BRIDGE_DISABLE_APP_SERVER="1"
 npm run start:bridge
 ```
 
-常见配置说明：
+Options:
 
-- `BRIDGE_PORT`：Bridge 监听端口，默认 `4518`。
-- `BRIDGE_HOST`：Bridge 监听地址，默认 `0.0.0.0`。
-- `BRIDGE_NAME`：配对时显示的电脑端名称。
-- `BRIDGE_PUBLIC_URL`：未来接入公网或 Relay 时使用的公开地址。
-- `CODEX_HOME`：Codex 本地数据目录。未配置时 Bridge 会自动检测，也可以在电脑端页面手动保存。
-- `BRIDGE_DATA_DIR`：Bridge 保存已配对设备的目录。
-- `CODEX_COMMAND`：启动 Codex App Server 的命令。
-- `BRIDGE_DISABLE_APP_SERVER=1`：只查看历史会话，不尝试发送消息到 Codex。
+- `BRIDGE_PORT`: Bridge port. Default: `4518`.
+- `BRIDGE_HOST`: Bridge host. Default: `0.0.0.0`.
+- `BRIDGE_NAME`: Name shown during pairing.
+- `BRIDGE_PUBLIC_URL`: Reserved for future public/relay transport.
+- `CODEX_HOME`: Codex data directory.
+- `BRIDGE_DATA_DIR`: Paired device data directory.
+- `CODEX_COMMAND`: Command used to start Codex App Server.
+- `BRIDGE_DISABLE_APP_SERVER=1`: Read-only mode. View sessions without sending messages.
 
-## Codex App Server 说明
+## Codex Data Detection
 
-Bridge 会尝试启动：
+Bridge tries to find Codex data automatically from:
+
+- `CODEX_HOME`.
+- Previously saved path in the web console.
+- `%USERPROFILE%\.codex`.
+- Common OpenAI / Codex local directories.
+
+If detection fails, open the web console and save the correct `.codex` folder path manually.
+
+## Codex App Server
+
+To send messages from phone/web back into an existing Codex thread, Bridge tries to start:
 
 ```powershell
 codex app-server
 ```
 
-如果这个命令可用，手机端就可以把消息发送到已有 Codex 线程。若当前 Windows 权限或 Codex 安装方式阻止 Bridge 启动 `codex.exe`，历史会话仍然可以查看，但发送消息会显示 App Server 不可用。
+If App Server is unavailable, CodeCCX can still read and display local session history. Sending messages and interrupting turns require App Server support.
 
-## 常见问题
+## Release Checklist
 
-手机打不开电脑地址：
+Before publishing a GitHub Release:
 
-- 确认手机和电脑在同一个 Wi-Fi，或在同一个 Tailscale / ZeroTier 网络。
-- 确认手机访问的是电脑 IP，不是 `127.0.0.1`。
-- 确认 Windows 防火墙允许 Node.js 或当前端口访问。
-- 确认终端里显示的端口和 App 输入的端口一致。
+1. Build the Bridge:
 
-配对失败：
+   ```powershell
+   npm run build:bridge:exe
+   ```
 
-- 配对 token 有有效期，过期后刷新电脑端 `/pair` 或重启 Bridge。
-- 确认手机输入的 Bridge 地址没有多余空格。
-- 确认电脑端终端里的 token 和手机端输入一致。
+2. Build or copy the latest Android APK to:
 
-能看历史，不能发送消息：
+   ```text
+   apps/desktop-bridge/release/CodeCCX-Android.apk
+   ```
 
-- 确认 `codex app-server` 能在终端里手动运行。
-- 如果暂时只需要查看历史，可以设置 `BRIDGE_DISABLE_APP_SERVER=1`。
+3. Upload these assets to GitHub Releases:
 
-Android Studio 同步失败：
+   ```text
+   apps/desktop-bridge/release/CodeCCX-Bridge.exe
+   apps/desktop-bridge/release/CodeCCX-Android.apk
+   ```
 
-- 确认 JDK 是 17。
-- 确认 Android SDK 35 已安装。
-- 确认网络能下载 Gradle 和 Android 依赖。
+4. Write release notes with:
 
-## 安全边界
+   - New features.
+   - Fixed bugs.
+   - Upgrade notes.
+   - Known issues.
 
-- Bridge 默认只适合局域网或 Tailscale / ZeroTier 私网使用。
-- 不要把 Bridge 端口直接暴露到公网。
-- 首次配对需要一次性 token。
-- 配对成功后，接口访问需要设备 token。
-- 设备 token 保存在电脑端 `BRIDGE_DATA_DIR` 下。
-- 后续如果购买服务器，应新增 Relay transport，不直接暴露本机 Bridge。
+## FAQ
+
+### Phone cannot open the Bridge URL
+
+- Make sure the phone and computer are on the same Wi-Fi, or the same Tailscale / ZeroTier network.
+- Use the computer IP address, not `127.0.0.1`.
+- Check that Windows Firewall allows access to the Bridge port.
+- Confirm the port shown by the terminal matches the port entered in the app.
+
+### Pairing fails
+
+- Refresh the pairing page or restart Bridge to get a new token.
+- Make sure the token has not expired.
+- Remove extra spaces from the Bridge URL.
+- Prefer QR pairing when possible.
+
+### Sessions are visible but sending does not work
+
+- Run `codex app-server` manually in a terminal to confirm it works.
+- Make sure `BRIDGE_DISABLE_APP_SERVER` is not set.
+- If you only need monitoring, read-only mode is enough.
+
+### Android Studio sync fails
+
+- Use JDK 17 or newer.
+- Install Android SDK 35.
+- Make sure Gradle and Android dependencies can be downloaded.
+
+## Roadmap
+
+- Push notifications when Codex completes a turn.
+- Better mobile background refresh.
+- PWA mode for iOS and browser-only mobile access.
+- Multi-computer management.
+- Optional HTTPS for local Bridge.
+- Device permission levels: read-only / send messages / interrupt.
+- More AI coding agent integrations.
+- Optional relay transport with end-to-end encryption.
+
+## Status
+
+CodeCCX is early-stage software. It is useful today for local monitoring and Android companion workflows, but the Codex App Server integration may change as Codex evolves.
+
+Contributions, testing feedback, and security reviews are welcome.
