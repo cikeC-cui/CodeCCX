@@ -3,7 +3,7 @@ import { createInterface, type Interface } from "node:readline";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { AppServerDiagnosticEvent, SendMessageResponse } from "@codex-companion/protocol";
+import type { AppServerDiagnosticEvent, AppServerLiveEvent, SendMessageResponse } from "@codex-companion/protocol";
 
 type PendingRequest = {
   resolve: (value: unknown) => void;
@@ -26,6 +26,7 @@ export class CodexAppServerClient {
   private initialized = false;
   private recentEvents: AppServerDiagnosticEvent[] = [];
   private activeTurnByThread = new Map<string, string>();
+  private liveEventListeners = new Set<(event: AppServerLiveEvent) => void>();
 
   constructor(
     private readonly command: string,
@@ -49,6 +50,13 @@ export class CodexAppServerClient {
       pendingRequests: this.pending.size,
       initialized: this.initialized,
       recentEvents: [...this.recentEvents]
+    };
+  }
+
+  onLiveEvent(listener: (event: AppServerLiveEvent) => void): () => void {
+    this.liveEventListeners.add(listener);
+    return () => {
+      this.liveEventListeners.delete(listener);
     };
   }
 
@@ -216,6 +224,8 @@ export class CodexAppServerClient {
 
   private handleServerNotification(message: JsonRpcMessage): void {
     this.trackTurnState(message);
+    const liveEvent = liveEventFromMessage(message);
+    if (liveEvent) this.emitLiveEvent(liveEvent);
     const summary = summarizeAppServerMessage(message);
     if (
       message.method === "error" ||
@@ -238,6 +248,12 @@ export class CodexAppServerClient {
       return;
     }
     this.activeTurnByThread.delete(threadId);
+  }
+
+  private emitLiveEvent(event: AppServerLiveEvent): void {
+    for (const listener of this.liveEventListeners) {
+      listener(event);
+    }
   }
 
   private async handleServerRequest(message: JsonRpcMessage): Promise<void> {
@@ -353,6 +369,44 @@ function summarizeAppServerMessage(message: JsonRpcMessage): string {
     return asString(record.message) || JSON.stringify(record);
   }
   return `${message.method}${threadId ? ` for ${threadId}` : ""}`;
+}
+
+function liveEventFromMessage(message: JsonRpcMessage): AppServerLiveEvent | null {
+  const params = message.params;
+  if (!params || typeof params !== "object") return null;
+  const record = params as Record<string, unknown>;
+  const threadId = asString(record.threadId);
+  if (!threadId) return null;
+  const turnId = readNestedString(record, ["turn", "id"]) || asString(record.turnId) || undefined;
+
+  if (message.method === "turn/started") {
+    return {
+      type: "turn_started",
+      threadId,
+      turnId
+    };
+  }
+
+  if (message.method === "item/agentMessage/delta") {
+    return {
+      type: "assistant_delta",
+      threadId,
+      turnId,
+      text: asString(record.delta)
+    };
+  }
+
+  if (message.method === "turn/completed") {
+    const turn = record.turn as Record<string, unknown> | undefined;
+    return {
+      type: "turn_completed",
+      threadId,
+      turnId,
+      status: asString(turn?.status) || asString(record.status) || "completed"
+    };
+  }
+
+  return null;
 }
 
 function decodeJwtPayload(token: string): Record<string, unknown> {

@@ -1338,7 +1338,7 @@ fun EmptyText(message: String) {
 fun List<ConversationEvent>.filterFor(filter: EventFilter): List<ConversationEvent> {
     return when (filter) {
         EventFilter.All -> this
-        EventFilter.Messages -> filter { it.kind == "user_message" || it.kind == "assistant_message" || isCompletedEvent(it) }
+        EventFilter.Messages -> filter { it.kind == "user_message" || it.kind == "assistant_message" }
         EventFilter.Reasoning -> filter { it.kind == "reasoning_summary" }
         EventFilter.Tools -> filter { it.kind == "tool_call" || it.kind == "tool_result" }
         EventFilter.Status -> filter { it.kind == "status" }

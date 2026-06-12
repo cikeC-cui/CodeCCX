@@ -144,6 +144,14 @@ export type SendMessageResponse = {
   message: string;
 };
 
+export type AppServerLiveEvent = {
+  type: "turn_started" | "assistant_delta" | "turn_completed";
+  threadId: string;
+  turnId?: string;
+  status?: string;
+  text?: string;
+};
+
 export type ApiError = {
   error: {
     code: string;
@@ -153,6 +161,7 @@ export type ApiError = {
 
 export type SocketEnvelope =
   | { type: "snapshot"; thread: ThreadSummary; events: ConversationEvent[] }
+  | { type: "app_server_event"; event: AppServerLiveEvent }
   | { type: "event"; event: ConversationEvent }
   | { type: "status"; status: string }
   | { type: "error"; message: string };

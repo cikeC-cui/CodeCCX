@@ -85,6 +85,11 @@ enum class ThreadStatusFilter(val label: String) {
     }
 }
 
+private data class PendingLocalEvent(
+    val event: ConversationEvent,
+    val previousMatchingRemoteCount: Int
+)
+
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val storage = BridgeStorage(application)
     private val client = BridgeClient()
@@ -95,6 +100,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var socketJob: Job? = null
     private var refreshJob: Job? = null
     private var replyRefreshJob: Job? = null
+    private val pendingLocalEvents = mutableMapOf<String, PendingLocalEvent>()
+    private var awaitingThreadId: String? = null
+    private var awaitingAssistantBaseline = 0
+    private var awaitingCompletionBaseline = 0
 
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state.asStateFlow()
@@ -392,10 +401,41 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         socketJob = viewModelScope.launch {
             try {
                 val snapshot = client.events(bridge.baseUrl, bridge.authToken, thread.id)
-                _state.value = _state.value.copy(selectedThread = snapshot.thread, events = snapshot.events.sortedBy { it.timestamp }, error = null)
+                _state.value = _state.value.copy(
+                    selectedThread = snapshot.thread,
+                    events = mergeSnapshotEvents(thread.id, snapshot.events),
+                    error = null
+                )
                 client.watchThread(bridge.baseUrl, bridge.authToken, thread.id).collect { envelope ->
-                    envelope.thread?.let { updatedThread ->
-                        _state.value = _state.value.copy(selectedThread = updatedThread, events = envelope.events.sortedBy { it.timestamp })
+                    if (envelope.type == "snapshot") {
+                        envelope.thread?.let { updatedThread ->
+                            _state.value = _state.value.copy(
+                                selectedThread = updatedThread,
+                                events = mergeSnapshotEvents(updatedThread.id, envelope.events)
+                            )
+                            completeAwaitingReplyIfObserved(updatedThread.id)
+                        }
+                    }
+                    if (envelope.type == "app_server_event") {
+                        val event = envelope.event
+                        if (event?.threadId == thread.id) {
+                            when (event.type) {
+                                "turn_started" -> {
+                                    if (_state.value.awaitingReply) {
+                                        _state.value = _state.value.copy(operationResult = "Code 已开始处理。")
+                                    }
+                                }
+                                "assistant_delta" -> {
+                                    if (_state.value.awaitingReply) {
+                                        _state.value = _state.value.copy(operationResult = "Code 正在回复...")
+                                    }
+                                }
+                                "turn_completed" -> {
+                                    completeAwaitingReply(thread.id, "本轮 Code 回复已完成。")
+                                    refreshSelectedThread(showBusy = false)
+                                }
+                            }
+                        }
                     }
                     envelope.message?.let { message ->
                         _state.value = _state.value.copy(error = message)
@@ -415,7 +455,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val thread = _state.value.selectedThread ?: return
         val text = _state.value.inputText.trim()
         if (text.isEmpty()) return
-        val assistantCountBeforeSend = _state.value.events.count { it.kind == "assistant_message" }
+        val remoteEventsBeforeSend = _state.value.events.filterNot { it.id.startsWith("local-") }
+        val assistantCountBeforeSend = remoteEventsBeforeSend.count { it.kind == "assistant_message" }
+        val completionCountBeforeSend = remoteEventsBeforeSend.count { isCompletedConversationEvent(it) }
+        val previousMatchingRemoteCount = remoteEventsBeforeSend.count { it.kind == "user_message" && it.text == text }
         val localEvent = ConversationEvent(
             id = "local-${System.currentTimeMillis()}",
             threadId = thread.id,
@@ -431,11 +474,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             awaitingReply = true,
             error = null
         )
+        pendingLocalEvents[localEvent.id] = PendingLocalEvent(localEvent, previousMatchingRemoteCount)
+        awaitingThreadId = thread.id
+        awaitingAssistantBaseline = assistantCountBeforeSend
+        awaitingCompletionBaseline = completionCountBeforeSend
         launchRequest(showBusy = false) {
-            val response = client.send(bridge.baseUrl, bridge.authToken, thread.id, text)
+            val response = try {
+                client.send(bridge.baseUrl, bridge.authToken, thread.id, text)
+            } catch (error: Throwable) {
+                pendingLocalEvents.remove(localEvent.id)
+                awaitingThreadId = null
+                _state.value = _state.value.copy(events = _state.value.events.filterNot { it.id == localEvent.id })
+                throw error
+            }
             if (response.accepted) {
-                waitForReply(thread.id, assistantCountBeforeSend)
+                waitForReply(thread.id, assistantCountBeforeSend, completionCountBeforeSend)
             } else {
+                pendingLocalEvents.remove(localEvent.id)
+                awaitingThreadId = null
                 _state.value = _state.value.copy(
                     events = _state.value.events.filterNot { it.id == localEvent.id },
                     operationResult = response.message,
@@ -505,6 +561,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         socketJob?.cancel()
         refreshJob?.cancel()
         replyRefreshJob?.cancel()
+        pendingLocalEvents.clear()
+        awaitingThreadId = null
         storage.clear()
         _state.value = UiState()
     }
@@ -520,6 +578,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun backToThreads() {
         socketJob?.cancel()
+        replyRefreshJob?.cancel()
+        awaitingThreadId = null
         _state.value = _state.value.copy(
             screen = Screen.Threads,
             selectedThread = null,
@@ -619,6 +679,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             } catch (_: CancellationException) {
             } catch (error: Throwable) {
                 if (!isExpectedCancellation(error)) {
+                    awaitingThreadId = null
                     _state.value = _state.value.copy(error = error.message, awaitingReply = false)
                 }
             } finally {
@@ -649,6 +710,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             threads = threads,
                             selectedThread = selectedFromList ?: _state.value.selectedThread
                         )
+                        _state.value.selectedThread?.let { completeAwaitingReplyIfObserved(it.id) }
                     }
                 val thread = _state.value.selectedThread
                 if (_state.value.screen == Screen.ThreadDetail && thread != null) {
@@ -656,8 +718,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         .onSuccess { snapshot ->
                             _state.value = _state.value.copy(
                                 selectedThread = snapshot.thread,
-                                events = snapshot.events.sortedBy { it.timestamp }
+                                events = mergeSnapshotEvents(thread.id, snapshot.events)
                             )
+                            completeAwaitingReplyIfObserved(thread.id)
                         }
                 }
             }
@@ -671,9 +734,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val snapshot = client.events(bridge.baseUrl, bridge.authToken, thread.id)
             _state.value = _state.value.copy(
                 selectedThread = snapshot.thread,
-                events = snapshot.events.sortedBy { it.timestamp },
+                events = mergeSnapshotEvents(thread.id, snapshot.events),
                 error = null
             )
+            completeAwaitingReplyIfObserved(thread.id)
         }
         if (showBusy) {
             block()
@@ -682,7 +746,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun waitForReply(threadId: String, assistantCountBeforeSend: Int) {
+    private fun waitForReply(threadId: String, assistantCountBeforeSend: Int, completionCountBeforeSend: Int) {
         replyRefreshJob?.cancel()
         replyRefreshJob = viewModelScope.launch {
             repeat(90) {
@@ -691,13 +755,60 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 if (selected.id != threadId) return@launch
                 refreshSelectedThread(showBusy = false)
                 val assistantCount = _state.value.events.count { it.kind == "assistant_message" }
-                if (assistantCount > assistantCountBeforeSend) {
-                    _state.value = _state.value.copy(operationResult = "已收到 Code 回复。", awaitingReply = false)
+                val completionCount = _state.value.events.count { isCompletedConversationEvent(it) }
+                if (assistantCount > assistantCountBeforeSend || completionCount > completionCountBeforeSend) {
+                    completeAwaitingReply(threadId, "已收到 Code 回复。")
                     return@launch
                 }
             }
-            _state.value = _state.value.copy(operationResult = "还没等到完整回复，页面会继续自动刷新。", awaitingReply = false)
+            val selected = _state.value.selectedThread
+            if (selected?.id == threadId && _state.value.awaitingReply) {
+                _state.value = _state.value.copy(operationResult = "Code 仍在处理，页面会继续自动刷新。", awaitingReply = false)
+            }
         }
+    }
+
+    private fun mergeSnapshotEvents(threadId: String, remoteEvents: List<ConversationEvent>): List<ConversationEvent> {
+        val iterator = pendingLocalEvents.entries.iterator()
+        while (iterator.hasNext()) {
+            val pending = iterator.next().value
+            val event = pending.event
+            if (event.threadId != threadId) continue
+            val matchingRemoteCount = remoteEvents.count { it.kind == "user_message" && it.text == event.text }
+            if (matchingRemoteCount > pending.previousMatchingRemoteCount) {
+                iterator.remove()
+            }
+        }
+        val localEvents = pendingLocalEvents.values
+            .map { it.event }
+            .filter { it.threadId == threadId }
+        return (remoteEvents + localEvents).distinctBy { it.id }.sortedBy { it.timestamp }
+    }
+
+    private fun completeAwaitingReplyIfObserved(threadId: String) {
+        val isWaitingForThisThread = _state.value.awaitingReply || _state.value.operationResult == "Code 仍在处理，页面会继续自动刷新。"
+        if (!isWaitingForThisThread || _state.value.selectedThread?.id != threadId || awaitingThreadId != threadId) return
+        val assistantCount = _state.value.events.count { it.kind == "assistant_message" }
+        val completionCount = _state.value.events.count { isCompletedConversationEvent(it) }
+        if (assistantCount > awaitingAssistantBaseline || completionCount > awaitingCompletionBaseline) {
+            completeAwaitingReply(threadId, "已收到 Code 回复。")
+        }
+    }
+
+    private fun completeAwaitingReply(threadId: String, message: String) {
+        if (_state.value.selectedThread?.id != threadId) return
+        if (
+            !_state.value.awaitingReply &&
+            _state.value.operationResult != "Code 正在回复..." &&
+            _state.value.operationResult != "Code 仍在处理，页面会继续自动刷新。"
+        ) return
+        replyRefreshJob?.cancel()
+        awaitingThreadId = null
+        _state.value = _state.value.copy(operationResult = message, awaitingReply = false)
+    }
+
+    private fun isCompletedConversationEvent(event: ConversationEvent): Boolean {
+        return event.kind == "status" && (event.title == "任务完成" || event.title == "Task complete")
     }
 
     private fun isExpectedCancellation(error: Throwable): Boolean {

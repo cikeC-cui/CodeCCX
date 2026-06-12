@@ -190,6 +190,7 @@ wss.on("connection", async (ws, request) => {
   const url = new URL(request.url ?? "/", `http://${request.headers.host}`);
   const threadId = String(url.pathname.split("/")[2]);
   let watcher: FSWatcher | null = null;
+  let unsubscribeAppServer: (() => void) | null = null;
 
   const send = (envelope: SocketEnvelope) => {
     if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(envelope));
@@ -210,12 +211,25 @@ wss.on("connection", async (ws, request) => {
         }
       });
     }
+    unsubscribeAppServer = appServer.onLiveEvent((event) => {
+      if (event.threadId !== threadId) return;
+      send({ type: "app_server_event", event });
+      if (event.type === "turn_completed") {
+        setTimeout(() => {
+          logStore
+            .getThreadEvents(threadId)
+            .then((latest) => send({ type: "snapshot", thread: latest.thread, events: latest.events }))
+            .catch((error) => send({ type: "error", message: error instanceof Error ? error.message : String(error) }));
+        }, 250);
+      }
+    });
   } catch (error) {
     send({ type: "error", message: error instanceof Error ? error.message : String(error) });
   }
 
   ws.on("close", () => {
     void watcher?.close();
+    unsubscribeAppServer?.();
   });
 });
 

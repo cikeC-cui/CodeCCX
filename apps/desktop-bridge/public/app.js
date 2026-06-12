@@ -366,7 +366,7 @@ function renderEvents() {
 function filteredEvents() {
   if (state.eventFilter === "all") return state.events;
   if (state.eventFilter === "messages") {
-    return state.events.filter((event) => event.kind === "user_message" || event.kind === "assistant_message" || isCompletedEvent(event));
+    return state.events.filter((event) => event.kind === "user_message" || event.kind === "assistant_message");
   }
   if (state.eventFilter === "tools") {
     return state.events.filter((event) => event.kind === "tool_call" || event.kind === "tool_result");

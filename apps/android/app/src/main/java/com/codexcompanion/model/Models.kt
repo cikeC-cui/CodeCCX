@@ -125,7 +125,17 @@ data class SocketSnapshot(
     val type: String,
     val thread: ThreadSummary? = null,
     val events: List<ConversationEvent> = emptyList(),
-    val message: String? = null
+    val message: String? = null,
+    val event: AppServerLiveEvent? = null
+)
+
+@Serializable
+data class AppServerLiveEvent(
+    val type: String,
+    val threadId: String,
+    val turnId: String? = null,
+    val status: String? = null,
+    val text: String? = null
 )
 
 @Serializable
