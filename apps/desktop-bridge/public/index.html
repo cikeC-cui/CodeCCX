@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Codex 伴侣</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="thread-pane">
+        <header class="pane-header">
+          <div>
+            <h1>Codex 伴侣</h1>
+            <p id="bridgeSubtitle">正在连接</p>
+          </div>
+          <button id="refreshButton" class="button icon-button" title="刷新会话" aria-label="刷新会话">刷新</button>
+        </header>
+
+        <section class="side-block">
+          <div class="search-box">
+            <label for="searchInput">搜索会话</label>
+            <input id="searchInput" type="search" placeholder="标题、内容或工作目录" />
+          </div>
+
+          <div class="list-meta">
+            <span id="threadCount">0 个会话</span>
+            <span id="activeCount">0 个运行中</span>
+          </div>
+          <div class="thread-list" id="threadList" aria-label="会话列表"></div>
+        </section>
+      </aside>
+
+      <main class="conversation-pane">
+        <header class="conversation-header">
+          <div class="title-block">
+            <span class="eyebrow">本机控制台</span>
+            <h2 id="threadTitle">选择一个会话</h2>
+            <p id="threadMeta">历史记录、任务状态和对话操作都会显示在这里。</p>
+          </div>
+          <div class="header-actions">
+            <button id="openAppButton" class="button secondary-button">新窗口</button>
+            <button id="disconnectButton" class="button secondary-button">重置</button>
+          </div>
+        </header>
+
+        <nav class="event-filter" aria-label="事件筛选">
+          <button class="filter-chip" data-filter="all">全部</button>
+          <button class="filter-chip active" data-filter="messages">对话</button>
+          <button class="filter-chip" data-filter="reasoning_summary">思考</button>
+          <button class="filter-chip" data-filter="tools">工具</button>
+          <button class="filter-chip" data-filter="status">状态</button>
+          <button class="filter-chip" data-filter="error">错误</button>
+        </nav>
+
+        <section class="event-scroll">
+          <div class="empty-state" id="emptyState">
+            <h3>还没有选择会话</h3>
+            <p>从左侧选择一个会话后，对话、思考摘要、工具调用和任务状态会显示在这里。</p>
+          </div>
+          <div class="events" id="eventList"></div>
+        </section>
+
+        <section class="panel action-panel composer-panel">
+          <h3>继续对话</h3>
+          <textarea id="messageInput" placeholder="给当前 Codex 会话发送消息，Ctrl+Enter 发送。"></textarea>
+          <div class="action-row">
+            <button id="sendButton" class="button primary-button">发送</button>
+            <button id="interruptButton" class="button danger-button">中断</button>
+          </div>
+          <p id="operationResult" class="muted result-line"></p>
+        </section>
+      </main>
+
+      <aside class="inspector-pane">
+        <section class="panel">
+          <h3>任务状态</h3>
+          <div class="metric-grid">
+            <div class="metric">
+              <span>状态</span>
+              <strong id="taskStatus">无</strong>
+            </div>
+            <div class="metric">
+              <span>消息</span>
+              <strong id="messageCount">0</strong>
+            </div>
+            <div class="metric">
+              <span>工具</span>
+              <strong id="toolCount">0</strong>
+            </div>
+            <div class="metric">
+              <span>错误</span>
+              <strong id="errorCount">0</strong>
+            </div>
+            <div class="metric">
+              <span>额度</span>
+              <strong id="quotaUsed">-</strong>
+            </div>
+            <div class="metric">
+              <span>Token</span>
+              <strong id="tokenUsage">-</strong>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h3>电脑端 Bridge</h3>
+          <div class="pairing-card">
+            <div class="pairing-head">
+              <div>
+                <span class="pairing-label">安卓配对</span>
+                <strong id="pairingStatus">正在获取配对码</strong>
+              </div>
+              <button id="refreshPairButton" class="button small-button">刷新</button>
+            </div>
+            <div class="copy-field">
+              <span>模拟器地址</span>
+              <code id="emulatorAddress">http://10.0.2.2:4518</code>
+              <button id="copyEmulatorAddressButton" class="button small-button">复制</button>
+            </div>
+            <div class="copy-field">
+              <span>真机地址</span>
+              <code id="lanAddress">-</code>
+              <button id="copyLanAddressButton" class="button small-button">复制</button>
+            </div>
+            <div class="copy-field">
+              <span>公网/虚拟网</span>
+              <code id="publicAddress">未配置</code>
+              <button id="copyPublicAddressButton" class="button small-button">复制</button>
+            </div>
+            <div class="copy-field">
+              <span>配对码</span>
+              <code id="pairToken">-</code>
+              <button id="copyPairTokenButton" class="button small-button primary-copy">复制</button>
+            </div>
+            <p id="copyResult" class="muted copy-result"></p>
+          </div>
+          <div class="kv">
+            <span>局域网地址</span>
+            <strong id="bridgeAddress">-</strong>
+          </div>
+          <div class="kv">
+            <span>Codex 服务</span>
+            <strong id="appServerStatus">检查中</strong>
+          </div>
+          <div class="kv">
+            <span>最近警告</span>
+            <strong id="backendWarning">-</strong>
+          </div>
+          <p class="muted" id="appServerError"></p>
+          <details class="diagnostic-toggle">
+            <summary>日志信息</summary>
+            <div class="diagnostic-list" id="appServerEvents"></div>
+          </details>
+        </section>
+      </aside>
+    </div>
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>

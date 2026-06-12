@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.env
+.env.*
+*.log
+*.hprof
+code_companion_*.png
+codex_companion_*.png
+软件包/
+.DS_Store
+.idea/
+.gradle/
+build/
+local.properties
+apps/android/.gradle/
+apps/android/build/
+apps/android/app/build/

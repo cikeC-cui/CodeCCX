@@ -1,0 +1,30 @@
+{
+  "name": "@codex-companion/desktop-bridge",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "check": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@codex-companion/protocol": "file:../../packages/protocol",
+    "chokidar": "^4.0.3",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "qrcode-terminal": "^0.12.0",
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.5",
+    "@types/node": "^24.10.1",
+    "@types/qrcode-terminal": "^0.12.2",
+    "@types/ws": "^8.18.1",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  }
+}

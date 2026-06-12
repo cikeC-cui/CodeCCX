@@ -1,0 +1,19 @@
+{
+  "name": "codex-android-companion",
+  "private": true,
+  "version": "1.0.0",
+  "description": "LAN and virtual-LAN companion app for viewing and continuing local Codex conversations.",
+  "workspaces": [
+    "apps/desktop-bridge",
+    "packages/protocol"
+  ],
+  "scripts": {
+    "build": "npm --workspace @codex-companion/protocol run build && npm --workspace @codex-companion/desktop-bridge run build",
+    "dev:bridge": "npm --workspace @codex-companion/desktop-bridge run dev",
+    "start:bridge": "npm --workspace @codex-companion/desktop-bridge start",
+    "check": "npm --workspace @codex-companion/protocol run check && npm --workspace @codex-companion/desktop-bridge run check"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
